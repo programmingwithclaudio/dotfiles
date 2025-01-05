@@ -13,7 +13,7 @@ Debes seguir estos pasos:
    ~/dotfiles/setup_environment.sh
    ```
 
-#### Configuración de Neovim
+#### Configuración de Neovim Y Wezterm
 
 Para configurar Neovim con un archivo `init.lua`, sigue estos pasos:
 
@@ -27,6 +27,7 @@ Para configurar Neovim con un archivo `init.lua`, sigue estos pasos:
    Luego, mueve el archivo `init.lua` desde tu repositorio de dotfiles a la ubicación de configuración de Neovim:
    ```bash
    mv ~/dotfiles/init.lua ~/.config/nvim/init.lua
+   mv ~/dotfiles/wezterm.lua ~/.config/wezterm/wezterm.lua
    ```
 
 - **Iniciar Neovim**:

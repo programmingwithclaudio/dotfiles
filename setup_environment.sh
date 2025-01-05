@@ -261,6 +261,7 @@ setup_neovim() {
     # Crear configuración de Neovim
     mkdir -p "$HOME/.config/nvim"
     mkdir -p "$HOME/.vim/undodir"
+    mkdir -p "$HOME/.config/wezterm"
     local NVIM_CONFIG="$HOME/.config/nvim/init.vim"
     
     if [ ! -f "$NVIM_CONFIG" ]; then
