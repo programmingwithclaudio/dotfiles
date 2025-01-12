@@ -1,6 +1,11 @@
 # Configuración de la Terminal de Desarrollo en Ubuntu/Debian
-
-Debes seguir estos pasos:
+- **Requisitos**:
+   Dentro de Neovim, ejecuta el comando para instalar los complementos necesarios:
+   ```vim
+   npm install -g typescript typescript-language-server prettier @prisma/language-server
+   pip install pyright ruff black isort
+   ```
+- Debes seguir estos pasos:
 
 - **Clonar el repositorio de dotfiles**
    Ejecuta el siguiente comando en tu terminal para clonar el repositorio que contiene tus configuraciones personalizadas:
@@ -35,13 +40,3 @@ Para configurar Neovim con un archivo `init.lua`, sigue estos pasos:
    ```bash
    nvim
    ```
-
-- **Instalar complementos**:
-   Dentro de Neovim, ejecuta el comando para instalar los complementos necesarios:
-   ```vim
-   :Mason
-   ```
-
-#### Notas Finales
-
-Esta configuración es un buen punto de partida para tu entorno de desarrollo. A medida que avances, puedes ir agregando mejoras y personalizaciones según tus necesidades. ¡Buena suerte con tu configuración!
