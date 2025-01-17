@@ -1,3 +1,6 @@
+-- init.lua
+-- Configuración de Neovim optimizada para TypeScript/Next.js y Python
+
 -- Configuración para ts_context_commentstring
 vim.g.skip_ts_context_commentstring_module = true
 
@@ -34,7 +37,7 @@ vim.opt.termguicolors = true
 vim.opt.scrolloff = 8
 vim.opt.signcolumn = "yes"
 vim.opt.updatetime = 50
-vim.opt.colorcolumn = "88"  -- Black formatter default
+-- vim.opt.colorcolumn = "88"
 
 -- Configuración de plugins
 require("lazy").setup({
@@ -268,6 +271,7 @@ cmp.setup({
   }),
 })
 
+
 -- Configuración específica para Java
 -- Configuración específica para Java con JDTLS
 local jdtls = require('jdtls')
@@ -341,7 +345,7 @@ local jdtls_config = {
 }
 
 -- Iniciar JDTLS
-jdtls.start_or_attach(jdtls_config)
+-- jdtls.start_or_attach(jdtls_config)
 
 
 -- Autocomando para iniciar JDTLS
@@ -452,7 +456,7 @@ require("telescope").setup({
   },
 })
 
--- Configuración de Neo-tree
+-- Configuración de 
 require("neo-tree").setup({
   filesystem = {
     filtered_items = {
