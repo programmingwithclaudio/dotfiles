@@ -174,8 +174,7 @@ source $ZSH/oh-my-zsh.sh
 
 # Path configurations
 export PATH="/opt/nvim/bin:$PATH"
-export VOLTA_HOME="$HOME/.volta"
-export PATH="$VOLTA_HOME/bin:$PATH"
+export PATH="$HOME/.local/share/fnm:$PATH
 
 # Alias útiles
 alias vim='nvim'
@@ -231,22 +230,27 @@ install_nerd_fonts() {
     rm -rf "$NERD_FONT" "$NERD_FONT.zip"
 }
 
-# Función para instalar y configurar Volta y Node.js
+# Función para instalar y configurar fnm y Node.js
 setup_node() {
-    if ! is_installed volta; then
-        log "INFO" "Instalando Volta..."
-        curl https://get.volta.sh | bash -s -- --skip-setup
-        
-        export VOLTA_HOME="$HOME/.volta"
-        export PATH="$VOLTA_HOME/bin:$PATH"
+    # Verificar si fnm está instalado
+    if ! command -v fnm &> /dev/null; then
+        log "INFO" "Instalando fnm..."
+        curl -fsSL https://fnm.vercel.app/install | bash
+
+        # Configurar variables de entorno para fnm
+        export PATH="/home/oak/.local/share/fnm:$PATH"
+        eval "$(fnm env --use-on-cd)"
     fi
 
-    if ! volta list node | grep -q "$NODE_LTS_VERSION"; then
+    # Verificar si la versión de Node.js está instalada
+    if ! fnm list | grep -q "$NODE_LTS_VERSION"; then
         log "INFO" "Instalando Node.js ${NODE_LTS_VERSION}..."
-        volta install "node@${NODE_LTS_VERSION}"
+        fnm install "$NODE_LTS_VERSION"
     fi
-}
 
+    # Establecer la versión por defecto
+    fnm default "$NODE_LTS_VERSION"
+}
 # Función para configurar Neovim
 setup_neovim() {
     log "INFO" "Configurando Neovim..."
