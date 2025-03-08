@@ -345,16 +345,6 @@ local jdtls_config = {
 }
 
 -- Iniciar JDTLS
--- jdtls.start_or_attach(jdtls_config)
-
-
--- Autocomando para iniciar JDTLS
-vim.api.nvim_create_autocmd("FileType", {
-    pattern = "java",
-    callback = function()
-        jdtls.start_or_attach(jdtls_config)
-    end
-})
 
 -- Keymaps específicos para Java
 local function jdtls_keymaps()
@@ -517,4 +507,203 @@ vim.api.nvim_create_autocmd("FileType", {
     vim.opt_local.tabstop = 4
     vim.opt_local.softtabstop = 4
   end,
+})
+
+local config = {
+    cmd = {
+        "java",
+        "-Declipse.application=org.eclipse.jdt.ls.core.id1",
+        "-Dosgi.bundles.defaultStartLevel=4",
+        "-Declipse.product=org.eclipse.jdt.ls.core.product",
+        "-Dlog.protocol=true",
+        "-Dlog.level=ALL",
+        "-Xmx4g",
+        "--add-modules=ALL-SYSTEM",
+        "--add-opens", "java.base/java.util=ALL-UNNAMED",
+        "--add-opens", "java.base/java.lang=ALL-UNNAMED",
+        "-jar", vim.fn.glob(vim.fn.stdpath("data") .. "/mason/packages/jdtls/plugins/org.eclipse.equinox.launcher_*.jar"),
+        "-configuration", vim.fn.stdpath("data") .. "/mason/packages/jdtls/config_linux",
+        "-data", "/home/oak/workspace"
+    },
+    root_dir = require("jdtls.setup").find_root({".git", "mvnw", "gradlew"}),
+    settings = {
+        java = {
+            signatureHelp = { enabled = true },
+            contentProvider = { preferred = "fernflower" },
+            sources = {
+                organizeImports = {
+                    starThreshold = 9999,
+                    staticStarThreshold = 9999,
+                }
+            },
+            configuration = {
+                runtimes = {
+                    {
+                        name = "JavaSE-17",
+                        path = "",
+                    },
+                    {
+                        name = "JavaSE-21",
+                        path = "/home/oak/.sdkman/candidates/java/21.0.5-oracle",
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+
+local config = {
+    cmd = {
+        "java",
+        "-Declipse.application=org.eclipse.jdt.ls.core.id1",
+        "-Dosgi.bundles.defaultStartLevel=4",
+        "-Declipse.product=org.eclipse.jdt.ls.core.product",
+        "-Dlog.protocol=true",
+        "-Dlog.level=ALL",
+        "-Xmx4g",
+        "--add-modules=ALL-SYSTEM",
+        "--add-opens", "java.base/java.util=ALL-UNNAMED",
+        "--add-opens", "java.base/java.lang=ALL-UNNAMED",
+        "-jar", vim.fn.glob(vim.fn.stdpath("data") .. "/mason/packages/jdtls/plugins/org.eclipse.equinox.launcher_*.jar"),
+        "-configuration", vim.fn.stdpath("data") .. "/mason/packages/jdtls/config_linux",
+        "-data", "/home/oak/workspace"
+    },
+    root_dir = require("jdtls.setup").find_root({".git", "mvnw", "gradlew"}),
+    settings = {
+        java = {
+            signatureHelp = { enabled = true },
+            contentProvider = { preferred = "fernflower" },
+            sources = {
+                organizeImports = {
+                    starThreshold = 9999,
+                    staticStarThreshold = 9999,
+                }
+            },
+            configuration = {
+                runtimes = {
+                    {
+                        name = "JavaSE-17",
+                        path = "",
+                    },
+                    {
+                        name = "JavaSE-21",
+                        path = "/home/oak/.sdkman/candidates/java/21.0.5-oracle",
+                    }
+                }
+            }
+        }
+    },
+    init_options = {
+        bundles = {}
+    }
+}
+
+-- Configuración adicional para evitar errores de inicialización
+vim.api.nvim_create_autocmd("FileType", {
+    pattern = "java",
+    callback = function()
+    end,
+})
+
+
+local config = {
+    cmd = {
+        "java",
+        "-Declipse.application=org.eclipse.jdt.ls.core.id1",
+        "-Dosgi.bundles.defaultStartLevel=4",
+        "-Declipse.product=org.eclipse.jdt.ls.core.product",
+        "-Dlog.protocol=true",
+        "-Dlog.level=ALL",
+        "-Xmx4g",
+        "--add-modules=ALL-SYSTEM",
+        "--add-opens", "java.base/java.util=ALL-UNNAMED",
+        "--add-opens", "java.base/java.lang=ALL-UNNAMED",
+        "-jar", vim.fn.glob(vim.fn.stdpath("data") .. "/mason/packages/jdtls/plugins/org.eclipse.equinox.launcher_*.jar"),
+        "-configuration", vim.fn.stdpath("data") .. "/mason/packages/jdtls/config_linux",
+        "-data", "/home/oak/workspace"
+    },
+    root_dir = require("jdtls.setup").find_root({".git", "mvnw", "gradlew"}),
+    settings = {
+        java = {
+            signatureHelp = { enabled = true },
+            contentProvider = { preferred = "fernflower" },
+            sources = {
+                organizeImports = {
+                    starThreshold = 9999,
+                    staticStarThreshold = 9999,
+                }
+            },
+            configuration = {
+                runtimes = {
+                    {
+                        name = "JavaSE-17",
+                        path = "",
+                    },
+                    {
+                        name = "JavaSE-21",
+                        path = "/home/oak/.sdkman/candidates/java/21.0.5-oracle",
+                    }
+                }
+            }
+        }
+    },
+    init_options = {
+        bundles = {}
+    }
+}
+
+-- Configuración adicional para evitar errores de inicialización
+vim.api.nvim_create_autocmd("FileType", {
+    pattern = "java",
+    callback = function()
+    end,
+})
+
+
+local jdtls = require("jdtls")
+local config = {
+    cmd = {
+        "java",
+        "-Declipse.application=org.eclipse.jdt.ls.core.id1",
+        "-Dosgi.bundles.defaultStartLevel=4",
+        "-Declipse.product=org.eclipse.jdt.ls.core.product",
+        "-Dlog.protocol=true",
+        "-Dlog.level=ALL",
+        "-Xmx4g",
+        "--add-modules=ALL-SYSTEM",
+        "--add-opens", "java.base/java.util=ALL-UNNAMED",
+        "--add-opens", "java.base/java.lang=ALL-UNNAMED",
+        "-jar", vim.fn.glob(vim.fn.stdpath("data") .. "/mason/packages/jdtls/plugins/org.eclipse.equinox.launcher_*.jar"),
+        "-configuration", vim.fn.stdpath("data") .. "/mason/packages/jdtls/config_linux",
+        "-data", vim.fn.stdpath("data") .. "/jdtls_workspace"
+    },
+    root_dir = jdtls.setup.find_root({".git", "mvnw", "gradlew"}),
+    settings = {
+        java = {
+            signatureHelp = { enabled = true },
+            contentProvider = { preferred = "fernflower" },
+            configuration = {
+                runtimes = {
+                    {
+                        name = "JavaSE-17",
+                        path = "/usr/lib/jvm/default",
+                    }
+                }
+            }
+        }
+    },
+    init_options = {
+        bundles = {}
+    }
+}
+
+vim.api.nvim_create_autocmd("FileType", {
+    pattern = "java",
+    callback = function()
+        if vim.bo.filetype == "java" and vim.fn.bufname() ~= "" then
+            jdtls.start_or_attach(config)
+        end
+    end,
 })

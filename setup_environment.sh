@@ -191,8 +191,7 @@ EOL
     fi
 }
 
-
-# Las funciones install_neovim, install_nerd_fonts, setup_node, setup_neovim, install_wezterm, e install_rust permanecen exactamente igual que en la versión anterior
+# Otras funciones
 
 # Función para instalar Neovim
 install_neovim() {
@@ -251,6 +250,8 @@ setup_node() {
     # Establecer la versión por defecto
     fnm default "$NODE_LTS_VERSION"
 }
+
+
 # Función para configurar Neovim
 setup_neovim() {
     log "INFO" "Configurando Neovim..."
