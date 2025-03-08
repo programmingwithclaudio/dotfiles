@@ -1,6 +1,6 @@
 
 # Available with Ubuntu/Debian | Archlinux 
-# IA Chat App with LangChain 🔥🚀
+# Dotfiles
 
 [![Tema de Colores](https://img.shields.io/badge/theme-gruvbox%20dark-brightgreen)](https://github.com/morhetz/gruvbox)
 [![Neovim](https://img.shields.io/badge/Neovim-v0.10.3-blueviolet)](https://neovim.io)
