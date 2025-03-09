@@ -315,10 +315,10 @@ install_nerd_fonts() {
 configure_jdtls() {
     log "INFO" "Configurando JDTLS para Neovim..."
     
-    # Instalación forzada para evitar conflictos de Mason
+    # Instalación forzada y limpieza previa
     nvim --headless -c "MasonInstall --force jdtls java-test java-debug-adapter" -c 'qall'
     
-    # Configuración mejorada de JDTLS
+    # Configuración mejorada
     local jdtls_config='
 local jdtls = require("jdtls")
 local config = {
@@ -360,14 +360,19 @@ local config = {
 vim.api.nvim_create_autocmd("FileType", {
     pattern = "java",
     callback = function()
-        jdtls.start_or_attach(config)
+        if vim.bo.filetype == "java" and vim.fn.bufname() ~= "" then
+            jdtls.start_or_attach(config)
+        end
     end,
 })'
 
-    # Añadir configuración mejorada al init.lua
+    # Manejo seguro de la configuración
     if [ -f "$HOME/dotfiles/init.lua" ]; then
-        # Buscar y eliminar configuración anterior
+        # Eliminar configuraciones antiguas
         sed -i '/jdtls\.start_or_attach/,/})/d' "$HOME/dotfiles/init.lua"
+        sed -i '/require("jdtls")/d' "$HOME/dotfiles/init.lua"
+        
+        # Añadir nueva configuración
         echo "$jdtls_config" >> "$HOME/dotfiles/init.lua"
     else
         log "ERROR" "Archivo init.lua no encontrado en dotfiles"
