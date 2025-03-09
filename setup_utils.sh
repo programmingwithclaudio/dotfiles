@@ -405,96 +405,6 @@ configure_jdtls() {
     fi
 }
 
-configure_wezterm() {
-    log "INFO" "Configurando WezTerm..."
-    
-    local wezterm_config='
-local wezterm = require("wezterm")
-return {
-    font = wezterm.font("Iosevka Nerd Font", {weight="Regular", stretch="Normal", style="Normal"}),
-    font_size = 12.0,
-    color_scheme = "Gruvbox Dark",
-    hide_tab_bar_if_only_one_tab = true,
-    enable_scroll_bar = false,
-    default_prog = { "zsh", "-l" },
-    warn_about_missing_glyphs = false
-}'
-    
-    if [ -f "$HOME/dotfiles/wezterm.lua" ]; then
-        echo "$wezterm_config" > "$HOME/dotfiles/wezterm.lua"
-    else
-        log "ERROR" "Archivo wezterm.lua no encontrado en dotfiles"
-        exit 1
-    fi
-}
-
-configure_jdtls() {
-    log "INFO" "Configurando JDTLS para Neovim..."
-    
-    # Instalación forzada y limpieza previa
-    nvim --headless -c "MasonInstall --force jdtls java-test java-debug-adapter" -c 'qall'
-    
-    # Configuración mejorada
-    local jdtls_config='
-local jdtls = require("jdtls")
-local config = {
-    cmd = {
-        "java",
-        "-Declipse.application=org.eclipse.jdt.ls.core.id1",
-        "-Dosgi.bundles.defaultStartLevel=4",
-        "-Declipse.product=org.eclipse.jdt.ls.core.product",
-        "-Dlog.protocol=true",
-        "-Dlog.level=ALL",
-        "-Xmx4g",
-        "--add-modules=ALL-SYSTEM",
-        "--add-opens", "java.base/java.util=ALL-UNNAMED",
-        "--add-opens", "java.base/java.lang=ALL-UNNAMED",
-        "-jar", vim.fn.glob(vim.fn.stdpath("data") .. "/mason/packages/jdtls/plugins/org.eclipse.equinox.launcher_*.jar"),
-        "-configuration", vim.fn.stdpath("data") .. "/mason/packages/jdtls/config_linux",
-        "-data", vim.fn.stdpath("data") .. "/jdtls_workspace"
-    },
-    root_dir = jdtls.setup.find_root({".git", "mvnw", "gradlew"}),
-    settings = {
-        java = {
-            signatureHelp = { enabled = true },
-            contentProvider = { preferred = "fernflower" },
-            configuration = {
-                runtimes = {
-                    {
-                        name = "JavaSE-17",
-                        path = "'$JAVA_HOME'",
-                    }
-                }
-            }
-        }
-    },
-    init_options = {
-        bundles = {}
-    }
-}
-
-vim.api.nvim_create_autocmd("FileType", {
-    pattern = "java",
-    callback = function()
-        if vim.bo.filetype == "java" and vim.fn.bufname() ~= "" then
-            jdtls.start_or_attach(config)
-        end
-    end,
-})'
-
-    # Manejo seguro de la configuración
-    if [ -f "$HOME/dotfiles/init.lua" ]; then
-        # Eliminar configuraciones antiguas
-        sed -i '/jdtls\.start_or_attach/,/})/d' "$HOME/dotfiles/init.lua"
-        sed -i '/require("jdtls")/d' "$HOME/dotfiles/init.lua"
-        
-        # Añadir nueva configuración
-        echo "$jdtls_config" >> "$HOME/dotfiles/init.lua"
-    else
-        log "ERROR" "Archivo init.lua no encontrado en dotfiles"
-        exit 1
-    fi
-}
 
 configure_wezterm() {
     log "INFO" "Configurando WezTerm..."
@@ -551,7 +461,7 @@ configure_neovim() {
     # Instalar plugins de Neovim
     log "INFO" "Instalando plugins de Neovim..."
     if is_installed nvim; then
-        nvim --headless "+Lazy! sync" +qa
+        nvim --headless "+Lazy sync" +qa
     else
         log "WARN" "Neovim no está disponible en el PATH. Se omitirá la instalación de plugins."
         log "INFO" "Ejecuta manualmente 'nvim' después de reiniciar la terminal para instalar los plugins."
