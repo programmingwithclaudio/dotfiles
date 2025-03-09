@@ -702,7 +702,10 @@ vim.api.nvim_create_autocmd("FileType", {
     pattern = "java",
     callback = function()
         if vim.bo.filetype == "java" and vim.fn.bufname() ~= "" then
-
+        end
+      end,
+  })
+  
 local jdtls = require("jdtls")
 local config = {
     cmd = {
