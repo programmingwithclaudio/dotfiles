@@ -21,4 +21,9 @@
   chmod +x ~/dotfiles/setup_utils.sh
   ~/dotfiles/setup_utils.sh
   ```
-
+  - Reemplaza los files basicos de configuracion por los de la repo
+  ```bash
+  rm -f ~/.config/nvim/init.lua ~/.config/wezterm/wezterm.lua
+  mv ~/dotfiles/init.lua ~/.config/nvim/init.lua
+  mv ~/dotfiles/wezterm.lua ~/.config/wezterm/wezterm.lua
+  ```
