@@ -107,24 +107,25 @@ install_system_dependencies() {
 }
 
 install_neovim() {
-    if is_installed nvim; then
-        log "INFO" "Neovim ya está instalado"
-        return 0
-    fi
-
-    log "INFO" "Instalando Neovim ${NVIM_VERSION}..."
+    log "INFO" "Instalando/Actualizando Neovim ${NVIM_VERSION}..."
+    sudo rm -rf /opt/nvim* # Limpiar instalaciones previas
     curl -LO "https://github.com/neovim/neovim/releases/download/${NVIM_VERSION}/nvim-linux64.tar.gz"
     tar -xzf nvim-linux64.tar.gz
-    sudo rm -rf /opt/nvim
-    sudo mv nvim-linux64 /opt/nvim
+    sudo mv nvim-linux64 /opt/nvim-${NVIM_VERSION}
+    sudo ln -sf /opt/nvim-${NVIM_VERSION} /opt/nvim
+    echo 'export PATH="/opt/nvim/bin:$PATH"' | tee -a ~/.bashrc ~/.zshrc
+    source ~/.zshrc
     rm nvim-linux64.tar.gz
-    
-    echo 'export PATH="/opt/nvim/bin:$PATH"' | tee -a "$HOME/.bashrc" "$HOME/.zshrc" >/dev/null
 }
+
 
 install_wezterm() {
     log "INFO" "Instalando WezTerm..."
-    
+    if is_installed wezterm; then
+        log "INFO" "WezTerm ya está instalado"
+        return 0
+    fi
+
     if [ "$DISTRO" = "debian" ]; then
         curl -fsSL https://apt.fury.io/wez/gpg.key | sudo gpg --yes --dearmor -o /usr/share/keyrings/wezterm-fury.gpg
         echo "deb [signed-by=/usr/share/keyrings/wezterm-fury.gpg] https://apt.fury.io/wez/ * *" | \
@@ -139,39 +140,48 @@ install_wezterm() {
 setup_node() {
     if ! is_installed fnm; then
         log "INFO" "Instalando fnm..."
-        curl -fsSL https://fnm.vercel.app/install | bash
-        export PATH="$HOME/.local/share/fnm:$PATH"
-        eval "$(fnm env --shell=bash)"
+        curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell
+        echo 'export PATH="$HOME/.local/share/fnm:$PATH"' >> ~/.zshrc
+        echo 'eval "$(fnm env --use-on-cd)"' >> ~/.zshrc
+        source ~/.zshrc
     fi
 
     log "INFO" "Instalando Node.js ${NODE_LTS_VERSION}..."
-    fnm install "$NODE_LTS_VERSION"
-    fnm default "$NODE_LTS_VERSION"
+    fnm install --lts
+    fnm default ${NODE_LTS_VERSION}
     fnm use default
     
+    # Verificar npm
+    if ! is_installed npm; then
+        log "ERROR" "npm no está disponible después de instalar Node.js"
+        exit 1
+    fi
+    
     log "INFO" "Instalando paquetes globales de npm..."
-    npm install -g typescript typescript-language-server prettier @prisma/language-server
+    npm install -g --force ${REQUIRED_NPM_PKGS[@]}
 }
 
 install_language_servers() {
-    log "INFO" "Instalando servidores de lenguaje Python..."
+    log "INFO" "Instalando herramientas Python..."
     
-    if [ "$DISTRO" = "debian" ]; then
-        # For Debian/Ubuntu, continue using pip
-        pip3 install --user pyright ruff black isort
+    # Sistema tipo para pipx
+    if [ "$DISTRO" = "arch" ]; then
+        python -m pip install --user pipx
+        python -m pipx ensurepath
+        for pkg in pyright ruff black isort; do
+            pipx install $pkg --force
+        done
     else
-        # For Arch Linux, use pipx
-        sudo pacman -S --noconfirm python-pipx
-        
-        # Install language servers using pipx
-        pipx install pyright
-        pipx install ruff
-        pipx install black
-        pipx install isort
-        
-        # Add pipx bin directory to PATH if not already there
-        echo 'export PATH="$HOME/.local/bin:$PATH"' | tee -a "$HOME/.bashrc" "$HOME/.zshrc" >/dev/null
+        pip3 install --user --upgrade ${REQUIRED_PY_PKGS[@]}
     fi
+    
+    # Verificar instalación
+    for pkg in ${REQUIRED_PY_PKGS[@]}; do
+        if ! pipx list | grep -q $pkg; then
+            log "ERROR" "Paquete Python $pkg no instalado"
+            exit 1
+        fi
+    done
 }
 
 setup_zsh() {
@@ -213,22 +223,18 @@ install_docker() {
 configure_docker() {
     log "INFO" "Configurando Docker..."
     
-    # Instalar Docker Compose
-    if ! is_installed docker-compose; then
-        log "INFO" "Instalando Docker Compose..."
-        sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-        sudo chmod +x /usr/local/bin/docker-compose
+    if ! groups | grep -q docker; then
+        log "INFO" "Añadiendo usuario al grupo docker..."
+        sudo usermod -aG docker $USER
+        newgrp docker
     fi
     
-    # Configurar permisos
-    if [ ! -S "/var/run/docker.sock" ]; then
-        log "ERROR" "Socket de Docker no encontrado"
-        exit 1
+    # Reiniciar servicio solo si es necesario
+    if ! systemctl is-active --quiet docker; then
+        sudo systemctl restart docker
     fi
-    
-    sudo chown $USER:docker /var/run/docker.sock
-    sudo chmod 660 /var/run/docker.sock
 }
+
 
 setup_java() {
     if ! is_installed java; then
@@ -288,25 +294,19 @@ install_java_dependencies() {
 }
 
 install_nerd_fonts() {
-    log "INFO" "Instalando Iosevka Nerd Font..."
+    log "INFO" "Instalando fuentes..."
     
-    local font_url="https://github.com/ryanoasis/nerd-fonts/releases/download/v3.3.0/Iosevka.zip"
-    local font_dir="$HOME/.local/share/fonts"
+    # Descargar y instalar fuentes
+    mkdir -p ~/.local/share/fonts
+    curl -L -o /tmp/Iosevka.zip "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONT_VERSION}/Iosevka.zip"
+    unzip -o /tmp/Iosevka.zip -d ~/.local/share/fonts/
     
-    mkdir -p "$font_dir"
-    curl -L -o "/tmp/Iosevka.zip" "$font_url"
-    unzip -o "/tmp/Iosevka.zip" -d "$font_dir"
-    rm "/tmp/Iosevka.zip"
+    # Limpiar nombres de archivos
+    find ~/.local/share/fonts/ -name "* *" -exec rename 's/ /-/g' {} \;
     
-    # Corregir nombres de archivos con espacios
-    find "$font_dir" -name "* *" -exec rename 's/ /-/g' {} \;
-    
-    # Forzar actualización de caché de fuentes
-    fc-cache -fv
-    
-    # Verificación adicional
-    if ! fc-list | grep -i "Iosevka" >/dev/null; then
-        log "ERROR" "La instalación de la fuente falló"
+    # Actualizar caché con verificación
+    if ! fc-cache -fv | grep -i "Iosevka"; then
+        log "ERROR" "Falló la instalación de fuentes"
         exit 1
     fi
 }
@@ -315,6 +315,22 @@ install_nerd_fonts() {
 configure_jdtls() {
     log "INFO" "Configurando JDTLS para Neovim..."
     
+    # Intento de instalación con reintentos
+    for attempt in {1..3}; do
+        nvim --headless -c "MasonInstall --force jdtls java-test java-debug-adapter" -c "qall"
+        if [ -d "$HOME/.local/share/nvim/mason/packages/jdtls" ]; then
+            break
+        else
+            log "WARN" "Intento $attempt fallido. Reintentando..."
+            sleep 2
+        fi
+    done
+    # Verificación final
+    if [ ! -d "$HOME/.local/share/nvim/mason/packages/jdtls" ]; then
+        log "ERROR" "Falló la instalación de JDTLS después de 3 intentos"
+        exit 1
+    fi
+
     # Instalación forzada y limpieza previa
     nvim --headless -c "MasonInstall --force jdtls java-test java-debug-adapter" -c 'qall'
     
@@ -601,29 +617,28 @@ vim.api.nvim_create_autocmd("FileType", {
     fi
 }
 main() {
-    log "INFO" "Iniciando instalación del entorno de desarrollo..."
+    log "INFO" "Iniciando instalación..."
     
-    # Orden de ejecución corregido
+    # Orden crítico revisado
     install_system_dependencies
     setup_dotfiles
     install_nerd_fonts
+    install_wezterm          # Instalar antes de configurar
     install_neovim
-    configure_wezterm
-    install_wezterm
+    configure_neovim         # Configurar después de instalar
     setup_node
     install_language_servers
     setup_zsh
     install_docker
     configure_docker
     setup_java
-    install_rust
     install_java_dependencies
+    install_rust
     configure_jdtls
-    configure_neovim
-
+    configure_wezterm        # Configurar después de instalar fuentes
+    
     log "INFO" "¡Instalación completada!"
-    log "WARN" "Por favor, cierra esta terminal y abre una nueva"
-    log "INFO" "Ejecuta 'nvim' para completar la configuración de plugins"
 }
+
 # Ejecutar el script
 main "$@"
