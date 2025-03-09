@@ -293,22 +293,20 @@ install_java_dependencies() {
     fi
 }
 
+
 install_nerd_fonts() {
-    log "INFO" "Instalando fuentes..."
-    
-    # Descargar y instalar fuentes
-    mkdir -p ~/.local/share/fonts
-    curl -L -o /tmp/Iosevka.zip "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONT_VERSION}/Iosevka.zip"
-    unzip -o /tmp/Iosevka.zip -d ~/.local/share/fonts/
-    
-    # Limpiar nombres de archivos
-    find ~/.local/share/fonts/ -name "* *" -exec rename 's/ /-/g' {} \;
-    
-    # Actualizar caché con verificación
-    if ! fc-cache -fv | grep -i "Iosevka"; then
-        log "ERROR" "Falló la instalación de fuentes"
-        exit 1
+    if fc-list | grep -i "$NERD_FONT" &> /dev/null; then
+        log "INFO" "Nerd Font ($NERD_FONT) ya está instalada"
+        return 0
     fi
+
+    log "INFO" "Instalando Nerd Font ($NERD_FONT)..."
+    curl -LO "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONT_VERSION}/${NERD_FONT}.zip"
+    unzip "$NERD_FONT.zip" -d "$NERD_FONT"
+    mkdir -p "$HOME/.local/share/fonts/"
+    mv "$NERD_FONT"/*.ttf "$HOME/.local/share/fonts/"
+    fc-cache -fv
+    rm -rf "$NERD_FONT" "$NERD_FONT.zip"
 }
 
 
