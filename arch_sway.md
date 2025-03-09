@@ -52,3 +52,14 @@ sudo systemctl restart docker
 sudo usermod -aG docker $USER
 docker run --rm --gpus all nvidia/cuda:11.4.3-base-ubuntu20.04 nvidia-smi
 ```
+- **cortex + unsloth  + huggingface**
+```bash
+# opcion 4 Llama-3.2-3B
+docker run --gpus all -it menloltd/cortex
+docker exec -it cortex /usr/local/bin/cortex run unsloth/Llama-3.2-3B-Instruct-GGUF
+
+docker exec -it cortex /usr/local/bin/cortex ps
+docker exec -it cortex /usr/local/bin/cortex models start unsloth:Llama-3.2-3B-Instruct-GGUF:Llama-3.2-3B-Instruct-Q4_K_M.gguf
+```
+#### Referencias
+[menloltd](https://hub.docker.com/r/menloltd/cortex)
