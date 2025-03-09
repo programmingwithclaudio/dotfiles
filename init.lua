@@ -294,93 +294,93 @@ end
 
 -- Validar la existencia de los archivos necesarios
 local function file_exists(path)
-    local f = io.open(path, "r")
-    if f then f:close() return true else return false end
+  local f = io.open(path, "r")
+  if f then f:close() return true else return false end
 end
 
 if not file_exists(launcher_jar) then
-    vim.notify("JDTLS launcher jar not found at: " .. launcher_jar, vim.log.levels.ERROR)
-    return
+  vim.notify("JDTLS launcher jar not found at: " .. launcher_jar, vim.log.levels.ERROR)
+  return
 end
 
 if not file_exists(config_path) then
-    vim.notify("JDTLS configuration not found at: " .. config_path, vim.log.levels.ERROR)
-    return
+  vim.notify("JDTLS configuration not found at: " .. config_path, vim.log.levels.ERROR)
+  return
 end
+
 
 -- Configuración de JDTLS
 local jdtls_config = {
-    cmd = {
-        'java',
-        '-Declipse.application=org.eclipse.jdt.ls.core.id1',
-        '-Dosgi.bundles.defaultStartLevel=4',
-        '-Declipse.product=org.eclipse.jdt.ls.core.product',
-        '-Dlog.protocol=true',
-        '-Dlog.level=ALL',
-        '-Xms1g',
-        '--add-modules=ALL-SYSTEM',
-        '--add-opens', 'java.base/java.util=ALL-UNNAMED',
-        '--add-opens', 'java.base/java.lang=ALL-UNNAMED',
-        '-jar', launcher_jar,
-        '-configuration', config_path,
-        '-data', home .. '/.cache/jdtls-workspace/' .. vim.fn.getcwd():gsub("/", "-")
-    },
-    root_dir = require('jdtls.setup').find_root({'.git', 'mvnw', 'gradlew', 'pom.xml'}),
-    settings = {
-        java = {
-            configuration = {
-                runtimes = {
-                    {
-                        name = "JavaSE-21",
-                        path = home .. "/.sdkman/candidates/java/21.0.5-oracle",
-                    }
-                },
-            },
-        },
-    },
-    init_options = {
-        bundles = {}
-    },
-    capabilities = require('cmp_nvim_lsp').default_capabilities()
+  cmd = {
+      'java',
+      '-Declipse.application=org.eclipse.jdt.ls.core.id1',
+      '-Dosgi.bundles.defaultStartLevel=4',
+      '-Declipse.product=org.eclipse.jdt.ls.core.product',
+      '-Dlog.protocol=true',
+      '-Dlog.level=ALL',
+      '-Xms1g',
+      '--add-modules=ALL-SYSTEM',
+      '--add-opens', 'java.base/java.util=ALL-UNNAMED',
+      '--add-opens', 'java.base/java.lang=ALL-UNNAMED',
+      '-jar', launcher_jar,
+      '-configuration', config_path,
+      '-data', home .. '/.cache/jdtls-workspace/' .. vim.fn.getcwd():gsub("/", "-")
+  },
+  root_dir = require('jdtls.setup').find_root({'.git', 'mvnw', 'gradlew', 'pom.xml'}),
+  settings = {
+      java = {
+          configuration = {
+              runtimes = {
+                  {
+                      name = "JavaSE-21",
+                      path = home .. "/.sdkman/candidates/java/21.0.5-oracle",
+                  }
+              },
+          },
+      },
+  },
+  init_options = {
+      bundles = {}
+  },
+  capabilities = require('cmp_nvim_lsp').default_capabilities()
 }
 
 -- Iniciar JDTLS
 
 -- Keymaps específicos para Java
 local function jdtls_keymaps()
-    local opts = { noremap=true, silent=true, buffer=vim.api.nvim_get_current_buf() }
-    vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
-    vim.keymap.set('n', 'gd', vim.lsp.buf.definition, opts)
-    vim.keymap.set('n', 'K', vim.lsp.buf.hover, opts)
-    vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, opts)
-    vim.keymap.set('n', '<C-k>', vim.lsp.buf.signature_help, opts)
-    vim.keymap.set('n', '<leader>wa', vim.lsp.buf.add_workspace_folder, opts)
-    vim.keymap.set('n', '<leader>wr', vim.lsp.buf.remove_workspace_folder, opts)
-    vim.keymap.set('n', '<leader>wl', function() print(vim.inspect(vim.lsp.buf.list_workspace_folders())) end, opts)
-    vim.keymap.set('n', '<leader>D', vim.lsp.buf.type_definition, opts)
-    vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, opts)
-    vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, opts)
-    vim.keymap.set('n', 'gr', vim.lsp.buf.references, opts)
-    vim.keymap.set('n', '<leader>f', function() vim.lsp.buf.format { async = true } end, opts)
-    
-    -- JDTLS specific
-    vim.keymap.set('n', '<leader>di', require('jdtls').organize_imports, opts)
-    vim.keymap.set('n', '<leader>dt', require('jdtls').test_class, opts)
-    vim.keymap.set('n', '<leader>dn', require('jdtls').test_nearest_method, opts)
-    vim.keymap.set('n', '<leader>dm', require('jdtls').extract_method, opts)
-    vim.keymap.set('n', '<leader>dc', require('jdtls').extract_constant, opts)
-    vim.keymap.set('v', '<leader>dm', [[<ESC><CMD>lua require('jdtls').extract_method(true)<CR>]], opts)
+  local opts = { noremap=true, silent=true, buffer=vim.api.nvim_get_current_buf() }
+  vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
+  vim.keymap.set('n', 'gd', vim.lsp.buf.definition, opts)
+  vim.keymap.set('n', 'K', vim.lsp.buf.hover, opts)
+  vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, opts)
+  vim.keymap.set('n', '<C-k>', vim.lsp.buf.signature_help, opts)
+  vim.keymap.set('n', '<leader>wa', vim.lsp.buf.add_workspace_folder, opts)
+  vim.keymap.set('n', '<leader>wr', vim.lsp.buf.remove_workspace_folder, opts)
+  vim.keymap.set('n', '<leader>wl', function() print(vim.inspect(vim.lsp.buf.list_workspace_folders())) end, opts)
+  vim.keymap.set('n', '<leader>D', vim.lsp.buf.type_definition, opts)
+  vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, opts)
+  vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action, opts)
+  vim.keymap.set('n', 'gr', vim.lsp.buf.references, opts)
+  vim.keymap.set('n', '<leader>f', function() vim.lsp.buf.format { async = true } end, opts)
+  
+  -- JDTLS specific
+  vim.keymap.set('n', '<leader>di', require('jdtls').organize_imports, opts)
+  vim.keymap.set('n', '<leader>dt', require('jdtls').test_class, opts)
+  vim.keymap.set('n', '<leader>dn', require('jdtls').test_nearest_method, opts)
+  vim.keymap.set('n', '<leader>dm', require('jdtls').extract_method, opts)
+  vim.keymap.set('n', '<leader>dc', require('jdtls').extract_constant, opts)
+  vim.keymap.set('v', '<leader>dm', [[<ESC><CMD>lua require('jdtls').extract_method(true)<CR>]], opts)
 end
 
 -- Autocomandos para Java
 vim.api.nvim_create_autocmd("FileType", {
-    pattern = "java",
-    callback = function()
-        require('jdtls').start_or_attach(jdtls_config)
-        jdtls_keymaps()
-    end
+  pattern = "java",
+  callback = function()
+      require('jdtls').start_or_attach(jdtls_config)
+      jdtls_keymaps()
+  end
 })
-
 -- Configuración de null-ls
 local null_ls = require("null-ls")
 null_ls.setup({
@@ -661,6 +661,47 @@ vim.api.nvim_create_autocmd("FileType", {
     end,
 })
 
+
+local config = {
+    cmd = {
+        "java",
+        "-Declipse.application=org.eclipse.jdt.ls.core.id1",
+        "-Dosgi.bundles.defaultStartLevel=4",
+        "-Declipse.product=org.eclipse.jdt.ls.core.product",
+        "-Dlog.protocol=true",
+        "-Dlog.level=ALL",
+        "-Xmx4g",
+        "--add-modules=ALL-SYSTEM",
+        "--add-opens", "java.base/java.util=ALL-UNNAMED",
+        "--add-opens", "java.base/java.lang=ALL-UNNAMED",
+        "-jar", vim.fn.glob(vim.fn.stdpath("data") .. "/mason/packages/jdtls/plugins/org.eclipse.equinox.launcher_*.jar"),
+        "-configuration", vim.fn.stdpath("data") .. "/mason/packages/jdtls/config_linux",
+        "-data", vim.fn.stdpath("data") .. "/jdtls_workspace"
+    },
+    root_dir = jdtls.setup.find_root({".git", "mvnw", "gradlew"}),
+    settings = {
+        java = {
+            signatureHelp = { enabled = true },
+            contentProvider = { preferred = "fernflower" },
+            configuration = {
+                runtimes = {
+                    {
+                        name = "JavaSE-17",
+                        path = "/usr/lib/jvm/default",
+                    }
+                }
+            }
+        }
+    },
+    init_options = {
+        bundles = {}
+    }
+}
+
+vim.api.nvim_create_autocmd("FileType", {
+    pattern = "java",
+    callback = function()
+        if vim.bo.filetype == "java" and vim.fn.bufname() ~= "" then
 
 local jdtls = require("jdtls")
 local config = {
