@@ -159,22 +159,33 @@ setup_node() {
 install_language_servers() {
     log "INFO" "Instalando herramientas Python..."
     
-    # Sistema tipo para pipx
+    # Determinar método de instalación según distribución
     if [ "$DISTRO" = "arch" ]; then
-        python -m pip install --user pipx
-        python -m pipx ensurepath
-        for pkg in pyright ruff black isort; do
-            pipx install $pkg --force
+        # Método para Arch Linux usando pipx
+        if ! is_installed pipx; then
+            log "INFO" "Instalando pipx..."
+            sudo pacman -S --noconfirm python-pipx
+            pipx ensurepath
+        fi
+        
+        # Lista de paquetes a instalar
+        local py_packages=(pyright ruff black isort)
+        
+        for pkg in "${py_packages[@]}"; do
+            log "INFO" "Instalando $pkg con pipx..."
+            pipx install "$pkg" --force || log "WARN" "No se pudo instalar $pkg"
         done
-    else
-        pip3 install --user --upgrade ${REQUIRED_PY_PKGS[@]}
+    elif [ "$DISTRO" = "debian" ]; then
+        # Para sistemas Debian/Ubuntu
+        pip3 install --user --upgrade pyright ruff black isort
     fi
     
     # Verificar instalación
-    for pkg in ${REQUIRED_PY_PKGS[@]}; do
-        if ! pipx list | grep -q $pkg; then
-            log "ERROR" "Paquete Python $pkg no instalado"
-            exit 1
+    for pkg in pyright ruff black isort; do
+        if ! command -v "$pkg" &> /dev/null; then
+            log "WARN" "Herramienta Python $pkg no disponible en PATH"
+        else
+            log "INFO" "$pkg instalado correctamente"
         fi
     done
 }
