@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Establecer modo estricto de bash
+# Establecer modo estricto de bash pero permitiendo variables no definidas para SDKMAN
 set -eo pipefail
 IFS=$'\n\t'
 
@@ -11,18 +11,6 @@ FONT_VERSION="v3.3.0"
 NODE_LTS_VERSION="20.11.1"
 JAVA_VERSION="21.0.5-oracle"
 JAVA_LTS_VERSION="17.0.12-oracle"
-DOTFILES_REPO="https://github.com/programmingwithclaudio/dotfiles.git"
-
-# Detectar distribución
-DISTRO=""
-if grep -qEi 'debian|ubuntu' /etc/os-release; then
-    DISTRO="debian"
-elif grep -qEi 'arch' /etc/os-release; then
-    DISTRO="arch"
-else
-    echo "Distribución no soportada!"
-    exit 1
-fi
 
 # Colores para mensajes
 RED='\033[0;31m'
@@ -37,12 +25,19 @@ log() {
     local message=$@
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     case "$level" in
-        "INFO") echo -e "${GREEN}[INFO]${NC} ${timestamp} - $message" ;;
-        "WARN") echo -e "${YELLOW}[WARN]${NC} ${timestamp} - $message" ;;
-        "ERROR") echo -e "${RED}[ERROR]${NC} ${timestamp} - $message" >&2 ;;
+        "INFO")
+            echo -e "${GREEN}[INFO]${NC} ${timestamp} - $message"
+            ;;
+        "WARN")
+            echo -e "${YELLOW}[WARN]${NC} ${timestamp} - $message"
+            ;;
+        "ERROR")
+            echo -e "${RED}[ERROR]${NC} ${timestamp} - $message" >&2
+            ;;
     esac
 }
 
+# Función mejorada para verificar errores
 check_error() {
     if [ $? -ne 0 ]; then
         log "ERROR" "$1"
@@ -50,10 +45,18 @@ check_error() {
     fi
 }
 
+# Verificar si se ejecuta como root
+if [ "$EUID" -eq 0 ]; then
+    log "ERROR" "No ejecutes este script como root o con sudo"
+    exit 1
+fi
+
+# Función para verificar si un binario existe
 is_installed() {
     command -v "$1" &> /dev/null
 }
 
+# Función para hacer backup de archivos de configuración
 backup_config() {
     local file=$1
     if [ -f "$file" ]; then
@@ -63,250 +66,267 @@ backup_config() {
     fi
 }
 
-setup_dotfiles() {
-    if [ ! -d "$HOME/dotfiles" ]; then
-        log "INFO" "Clonando repositorio de dotfiles..."
-        git clone "$DOTFILES_REPO" "$HOME/dotfiles"
-        check_error "Error al clonar el repositorio de dotfiles"
+# Función para agregar línea a archivo si no existe
+append_if_not_exists() {
+    local line=$1
+    local file=$2
+    if [ -f "$file" ]; then
+        grep -qxF "$line" "$file" || echo "$line" >> "$file"
     else
-        log "INFO" "Actualizando dotfiles..."
-        (cd "$HOME/dotfiles" && git pull)
-        check_error "Error al actualizar el repositorio de dotfiles"
+        mkdir -p "$(dirname "$file")"
+        echo "$line" > "$file"
     fi
 }
 
-
-install_system_dependencies() {
-    log "INFO" "Actualizando el sistema..."
-    if [ "$DISTRO" = "debian" ]; then
-        sudo apt update && sudo apt upgrade -y
-    else
-        sudo pacman -Syu --noconfirm
-    fi
-    check_error "No se pudo actualizar el sistema"
-
-    log "INFO" "Instalando dependencias requeridas..."
-    local deps_debian=(
-        ninja-build gettext libtool libtool-bin autoconf automake 
-        cmake g++ pkg-config unzip curl git build-essential 
-        lua5.4 luarocks zsh ripgrep fd-find fzf bat python3-pip
-    )
-    local deps_arch=(
-        ninja gettext libtool autoconf automake cmake gcc pkgconf 
-        unzip curl git base-devel lua luarocks zsh ripgrep 
-        fd fzf bat python-pip
-    )
-
-    if [ "$DISTRO" = "debian" ]; then
-        sudo apt install -y "${deps_debian[@]}"
-        [ ! -f /usr/bin/fd ] && sudo ln -s $(which fdfind) /usr/bin/fd
-    else
-        sudo pacman -S --noconfirm "${deps_arch[@]}"
-    fi
-    check_error "No se pudieron instalar las dependencias"
-}
-
-install_neovim() {
-    log "INFO" "Instalando/Actualizando Neovim ${NVIM_VERSION}..."
-    sudo rm -rf /opt/nvim* # Limpiar instalaciones previas
-    curl -LO "https://github.com/neovim/neovim/releases/download/${NVIM_VERSION}/nvim-linux64.tar.gz"
-    tar -xzf nvim-linux64.tar.gz
-    sudo mv nvim-linux64 /opt/nvim-${NVIM_VERSION}
-    sudo ln -sf /opt/nvim-${NVIM_VERSION} /opt/nvim
-    echo 'export PATH="/opt/nvim/bin:$PATH"' | tee -a ~/.bashrc ~/.zshrc
-    source ~/.zshrc
-    rm nvim-linux64.tar.gz
-}
-
-
-install_wezterm() {
-    log "INFO" "Instalando WezTerm..."
-    if is_installed wezterm; then
-        log "INFO" "WezTerm ya está instalado"
-        return 0
-    fi
-
-    if [ "$DISTRO" = "debian" ]; then
-        curl -fsSL https://apt.fury.io/wez/gpg.key | sudo gpg --yes --dearmor -o /usr/share/keyrings/wezterm-fury.gpg
-        echo "deb [signed-by=/usr/share/keyrings/wezterm-fury.gpg] https://apt.fury.io/wez/ * *" | \
-            sudo tee /etc/apt/sources.list.d/wezterm.list
-        sudo apt update && sudo apt install -y wezterm-nightly
-    else
-        sudo pacman -S --noconfirm wezterm
-    fi
-    check_error "Error instalando WezTerm"
-}
-
-setup_node() {
-    log "INFO" "Configurando entorno Node.js..."
-    if ! is_installed fnm; then
-        log "INFO" "Instalando fnm..."
-        curl -fsSL https://fnm.vercel.app/install | bash
-        export PATH="$HOME/.local/share/fnm:$PATH"
-        eval "$(fnm env --shell=bash)"
-    fi
-
-    log "INFO" "Instalando Node.js ${NODE_LTS_VERSION}..."
-    # Usar la versión exacta sin --lts
-    fnm install "$NODE_LTS_VERSION"
-    fnm default "$NODE_LTS_VERSION"
-    fnm use default
-    
-    log "INFO" "Instalando paquetes globales de npm..."
-    npm install -g typescript typescript-language-server prettier @prisma/language-server
-}
-
-install_language_servers() {
-    log "INFO" "Instalando herramientas Python..."
-    
-    # Determinar método de instalación según distribución
-    if [ "$DISTRO" = "arch" ]; then
-        # Método para Arch Linux usando pipx
-        if ! is_installed pipx; then
-            log "INFO" "Instalando pipx..."
-            sudo pacman -S --noconfirm python-pipx
-            pipx ensurepath
-        fi
-        
-        # Lista de paquetes a instalar
-        local py_packages=(pyright ruff black isort)
-        
-        for pkg in "${py_packages[@]}"; do
-            log "INFO" "Instalando $pkg con pipx..."
-            pipx install "$pkg" --force || log "WARN" "No se pudo instalar $pkg"
-        done
-    elif [ "$DISTRO" = "debian" ]; then
-        # Para sistemas Debian/Ubuntu
-        pip3 install --user --upgrade pyright ruff black isort
-    fi
-    
-    # Verificar instalación
-    for pkg in pyright ruff black isort; do
-        if ! command -v "$pkg" &> /dev/null; then
-            log "WARN" "Herramienta Python $pkg no disponible en PATH"
+# Función para detectar distribución
+detect_distro() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        DISTRO="${ID}"
+        if [ "$DISTRO" == "ubuntu" ] || [ "$DISTRO" == "debian" ]; then
+            PACKAGE_MANAGER="apt"
+        elif [ "$DISTRO" == "arch" ] || [ "$DISTRO" == "manjaro" ]; then
+            PACKAGE_MANAGER="pacman"
         else
-            log "INFO" "$pkg instalado correctamente"
+            log "ERROR" "Distribución no soportada: $DISTRO"
+            exit 1
         fi
-    done
+    else
+        log "ERROR" "No se pudo detectar la distribución"
+        exit 1
+    fi
+    log "INFO" "Distribución detectada: $DISTRO, Gestor de paquetes: $PACKAGE_MANAGER"
 }
 
+# Función para instalar dependencias del sistema
+install_system_dependencies() {
+    if [ "$PACKAGE_MANAGER" == "apt" ]; then
+        if [ "$(sudo apt-get update 2>&1 | grep -c "packages can be upgraded")" -eq 0 ]; then
+            log "INFO" "Paquetes ya actualizados, omitiendo actualización del sistema"
+        else
+            log "INFO" "Actualizando el sistema..."
+            sudo apt update && sudo apt upgrade -y
+            check_error "No se pudo actualizar el sistema"
+        fi
+
+        log "INFO" "Instalando dependencias requeridas..."
+        local deps=(
+            ninja-build gettext libtool libtool-bin autoconf 
+            automake cmake g++ pkg-config unzip curl git 
+            build-essential lua5.4 luarocks zsh ripgrep 
+            fd-find fzf bat
+        )
+        
+        # Verificar qué paquetes ya están instalados
+        local missing_deps=()
+        for dep in "${deps[@]}"; do
+            if ! dpkg -s $dep >/dev/null 2>&1; then
+                missing_deps+=("$dep")
+            fi
+        done
+        
+        if [ ${#missing_deps[@]} -eq 0 ]; then
+            log "INFO" "Todas las dependencias ya están instaladas"
+        else
+            log "INFO" "Instalando dependencias faltantes: ${missing_deps[*]}"
+            sudo apt install -y "${missing_deps[@]}"
+            check_error "No se pudieron instalar las dependencias"
+        fi
+    elif [ "$PACKAGE_MANAGER" == "pacman" ]; then
+        log "INFO" "Actualizando el sistema..."
+        sudo pacman -Syu --noconfirm
+
+        log "INFO" "Instalando dependencias requeridas..."
+        local deps=(
+            ninja gettext libtool autoconf automake 
+            cmake gcc pkg-config unzip curl git 
+            base-devel lua luarocks zsh ripgrep 
+            fd fzf bat
+        )
+        
+        # Verificar qué paquetes ya están instalados
+        local missing_deps=()
+        for dep in "${deps[@]}"; do
+            if ! pacman -Q $dep >/dev/null 2>&1; then
+                missing_deps+=("$dep")
+            fi
+        done
+        
+        if [ ${#missing_deps[@]} -eq 0 ]; then
+            log "INFO" "Todas las dependencias ya están instaladas"
+        else
+            log "INFO" "Instalando dependencias faltantes: ${missing_deps[*]}"
+            sudo pacman -S --needed --noconfirm "${missing_deps[@]}"
+            check_error "No se pudieron instalar las dependencias"
+        fi
+    fi
+}
+
+# Función para instalar SDKMAN y Java de manera segura
+setup_java() {
+    if ! command -v sdk &> /dev/null; then
+        log "INFO" "Instalando SDKMAN..."
+        # Crear archivo temporal para el script de instalación
+        local tmp_install="/tmp/sdkman_install.sh"
+        curl -s "https://get.sdkman.io" > "$tmp_install"
+        bash "$tmp_install"
+        rm -f "$tmp_install"
+        
+        # Configurar SDKMAN de manera segura
+        local sdkman_init="$HOME/.sdkman/bin/sdkman-init.sh"
+        if [ -f "$sdkman_init" ]; then
+            # Asegurarnos de que las variables de shell estén definidas
+            export BASH_VERSION=${BASH_VERSION:-}
+            export ZSH_VERSION=${ZSH_VERSION:-}
+            
+            # Sourcear SDKMAN de manera segura
+            set +u  # Temporalmente permitir variables no definidas
+            source "$sdkman_init"
+            set -u  # Restaurar modo estricto
+        fi
+    else
+        log "INFO" "SDKMAN ya está instalado"
+    fi
+
+    # Verificar que SDKMAN está disponible
+    if ! command -v sdk &> /dev/null; then
+        log "ERROR" "SDKMAN no se instaló correctamente"
+        exit 1
+    fi
+
+    log "INFO" "Verificando versiones de Java..."
+    # Temporalmente permitir variables no definidas para SDKMAN
+    set +u
+    source "$HOME/.sdkman/bin/sdkman-init.sh"
+    
+    # Instalar Java solo si no está ya instalado
+    if ! sdk list java | grep -q "$JAVA_VERSION"; then
+        log "INFO" "Instalando Java $JAVA_VERSION..."
+        sdk install java "$JAVA_VERSION" || true
+    else
+        log "INFO" "Java $JAVA_VERSION ya está instalado"
+    fi
+    
+    if ! sdk list java | grep -q "$JAVA_LTS_VERSION"; then
+        log "INFO" "Instalando Java $JAVA_LTS_VERSION..."
+        sdk install java "$JAVA_LTS_VERSION" || true
+    else
+        log "INFO" "Java $JAVA_LTS_VERSION ya está instalado"
+    fi
+    
+    # Configurar versión por defecto
+    sdk default java "$JAVA_VERSION"
+    set -u
+}
+
+# Función para instalar y configurar Zsh
 setup_zsh() {
+    log "INFO" "Verificando configuración de Zsh..."
+    
+    # Instalar Zsh si no está instalado
+    if ! is_installed zsh; then
+        log "INFO" "Instalando Zsh..."
+        if [ "$PACKAGE_MANAGER" == "apt" ]; then
+            sudo apt install -y zsh
+        elif [ "$PACKAGE_MANAGER" == "pacman" ]; then
+            sudo pacman -S --noconfirm zsh
+        fi
+        check_error "No se pudo instalar Zsh"
+    else
+        log "INFO" "Zsh ya está instalado"
+    fi
+
+    # Instalar Oh My Zsh si no está instalado
     if [ ! -d "$HOME/.oh-my-zsh" ]; then
         log "INFO" "Instalando Oh My Zsh..."
-        sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+        sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+        check_error "No se pudo instalar Oh My Zsh"
+    else
+        log "INFO" "Oh My Zsh ya está instalado"
     fi
 
+    # Backup y creación de nuevo .zshrc solo si no existe o no tiene la configuración esperada
+    if [ ! -f "$HOME/.zshrc" ] || ! grep -q "SDKMAN_DIR" "$HOME/.zshrc"; then
+        backup_config "$HOME/.zshrc"
+        
+        # Crear nuevo .zshrc con configuración segura
+        cat > "$HOME/.zshrc" <<'EOL'
+# Path to your oh-my-zsh installation.
+export ZSH="$HOME/.oh-my-zsh"
+
+# Theme
+ZSH_THEME="robbyrussell"
+
+# Plugins
+plugins=(git node npm)
+
+# Configuración de SDKMAN
+export SDKMAN_DIR="$HOME/.sdkman"
+if [[ -s "$HOME/.sdkman/bin/sdkman-init.sh" ]]; then
+    # Asegurar que las variables están definidas
+    export BASH_VERSION=${BASH_VERSION:-}
+    export ZSH_VERSION=${ZSH_VERSION:-}
+    source "$HOME/.sdkman/bin/sdkman-init.sh"
+fi
+
+# Sourcing Oh My Zsh
+source $ZSH/oh-my-zsh.sh
+
+# Path configurations
+export PATH="/opt/nvim/bin:$PATH"
+export PATH="$HOME/.local/share/fnm:$PATH"
+
+# Alias útiles
+alias vim='nvim'
+alias ll='ls -alF'
+alias la='ls -A'
+alias l='ls -CF'
+EOL
+        log "INFO" "Archivo .zshrc configurado"
+    else
+        log "INFO" "Archivo .zshrc ya contiene configuración"
+    fi
+
+    # Cambiar shell por defecto a Zsh de manera segura
     if [ "$SHELL" != "$(which zsh)" ]; then
         log "INFO" "Cambiando shell por defecto a Zsh..."
         sudo chsh -s "$(which zsh)" "$USER"
-    fi
-}
-
-install_docker() {
-    if ! is_installed docker; then
-        log "INFO" "Instalando Docker..."
-        
-        if [ "$DISTRO" = "debian" ]; then
-            # Configurar repositorio para Debian/Ubuntu
-            sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
-            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-            echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list
-            sudo apt update
-            sudo apt install -y docker-ce docker-ce-cli containerd.io
-        else
-            # Instalación para Arch Linux
-            sudo pacman -S --noconfirm docker
-            sudo systemctl start docker.service
-            sudo systemctl enable docker.service
-        fi
-        check_error "Error en la instalación de Docker"
-        
-        # Agregar usuario al grupo docker
-        sudo usermod -aG docker $USER
-    fi
-}
-
-configure_docker() {
-    log "INFO" "Configurando Docker..."
-    
-    # Verificación y configuración de grupos
-    if ! groups | grep -q docker; then
-        log "INFO" "Añadiendo usuario al grupo docker..."
-        sudo usermod -aG docker "$USER"
-        newgrp docker <<< "echo 'Grupo docker actualizado'"
-    fi
-    
-    # Reinicio seguro del servicio
-    if ! systemctl is-active --quiet docker; then
-        log "INFO" "Iniciando servicio Docker..."
-        sudo systemctl start docker
-        sudo systemctl enable docker
-    fi
-    
-    # Verificación final
-    if ! docker info &>/dev/null; then
-        log "ERROR" "No se pudo inicializar Docker correctamente"
-        exit 1
-    fi
-}
-
-setup_java() {
-    if ! is_installed java; then
-        log "INFO" "Configurando Java..."
-        
-        # Instalar SDKMAN si no existe
-        if [ ! -d "$HOME/.sdkman" ]; then
-            curl -s "https://get.sdkman.io" | bash
-            source "$HOME/.sdkman/bin/sdkman-init.sh"
-        fi
-        
-        # Instalar versiones de Java
-        sdk install java $JAVA_VERSION
-        sdk install java $JAVA_LTS_VERSION
-        sdk default java $JAVA_VERSION
-        
-        # Configurar variables de entorno
-        echo 'export JAVA_HOME="$HOME/.sdkman/candidates/java/current"' >> $HOME/.zshrc
-        echo 'export PATH="$JAVA_HOME/bin:$PATH"' >> $HOME/.zshrc
-    fi
-}
-
-install_rust() {
-    if ! is_installed rustc; then
-        log "INFO" "Instalando Rust..."
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        source "$HOME/.cargo/env"
-        echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> $HOME/.zshrc
-    fi
-}
-
-# Añadir estas nuevas funciones al script
-install_java_dependencies() {
-    log "INFO" "Instalando dependencias Java..."
-    
-    if [ "$DISTRO" = "debian" ]; then
-        sudo apt install -y openjdk-17-jdk maven gradle
-        local java_home=$(update-alternatives --list java | head -1 | sed 's/\/bin\/java//')
+        check_error "No se pudo cambiar la shell por defecto"
     else
-        sudo pacman -S --noconfirm jdk-openjdk maven gradle
-        # Corregir ruta para Arch Linux
-        local java_home="/usr/lib/jvm/default"
-        if [ ! -d "$java_home" ]; then
-            java_home=$(ls -d /usr/lib/jvm/java-*-openjdk | head -1)
-        fi
-    fi
-    
-    # Validación mejorada de JAVA_HOME
-    if [ -d "$java_home" ]; then
-        echo "export JAVA_HOME='$java_home'" | tee -a "$HOME/.bashrc" "$HOME/.zshrc"
-        export JAVA_HOME="$java_home"
-        log "INFO" "JAVA_HOME configurado en: $java_home"
-    else
-        log "ERROR" "No se pudo determinar JAVA_HOME - Directorio no encontrado: $java_home"
-        exit 1
+        log "INFO" "Zsh ya es la shell por defecto"
     fi
 }
 
+# Función para instalar Neovim
+install_neovim() {
+    if is_installed nvim && nvim --version | grep -q "$NVIM_VERSION"; then
+        log "INFO" "Neovim ${NVIM_VERSION} ya está instalado"
+        return 0
+    fi
+
+    log "INFO" "Instalando Neovim ${NVIM_VERSION}..."
+    local nvim_tarball="nvim-linux64.tar.gz"
+    
+    # Descargar solo si no existe
+    if [ ! -f "$nvim_tarball" ]; then
+        curl -LO "https://github.com/neovim/neovim/releases/download/${NVIM_VERSION}/${nvim_tarball}"
+        check_error "No se pudo descargar Neovim"
+    fi
+    
+    tar -xzf "$nvim_tarball"
+    sudo rm -rf /opt/nvim
+    sudo mkdir -p /opt/nvim
+    sudo cp -r nvim-linux64/* /opt/nvim/
+    rm -rf nvim-linux64 "$nvim_tarball"
+
+    # Configurar PATH para Neovim
+    append_if_not_exists 'export PATH="/opt/nvim/bin:$PATH"' "$HOME/.profile"
+    
+    # Actualizar PATH en la sesión actual
+    export PATH="/opt/nvim/bin:$PATH"
+    
+    log "INFO" "Neovim instalado correctamente"
+}
 
 install_nerd_fonts() {
     if fc-list | grep -i "$NERD_FONT" &> /dev/null; then
@@ -315,262 +335,329 @@ install_nerd_fonts() {
     fi
 
     log "INFO" "Instalando Nerd Font ($NERD_FONT)..."
-    curl -LO "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONT_VERSION}/${NERD_FONT}.zip"
-    unzip "$NERD_FONT.zip" -d "$NERD_FONT"
+    local font_zip="${NERD_FONT}.zip"
+    
+    # Descargar solo si no existe
+    if [ ! -f "$font_zip" ]; then
+        curl -LO "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONT_VERSION}/${font_zip}"
+        check_error "No se pudo descargar la fuente"
+    fi
+    
+    unzip -o "$font_zip" -d "$NERD_FONT"
     mkdir -p "$HOME/.local/share/fonts/"
-    mv "$NERD_FONT"/*.ttf "$HOME/.local/share/fonts/"
+    cp "$NERD_FONT"/*.ttf "$HOME/.local/share/fonts/"
     fc-cache -fv
-    rm -rf "$NERD_FONT" "$NERD_FONT.zip"
+    rm -rf "$NERD_FONT" "$font_zip"
+    
+    log "INFO" "Nerd Font instalada correctamente"
 }
 
+# Función para instalar y configurar fnm y Node.js
+setup_node() {
+    # Verificar si fnm está instalado
+    if ! command -v fnm &> /dev/null; then
+        log "INFO" "Instalando fnm..."
+        curl -fsSL https://fnm.vercel.app/install | bash
 
-configure_jdtls() {
-    log "INFO" "Configurando JDTLS para Neovim..."
-    
-    # Intento de instalación con reintentos mejorado
-    MAX_RETRIES=3
-    RETRY_DELAY=5
-    for ((i=1; i<=$MAX_RETRIES; i++)); do
-        log "INFO" "Intento de instalación $i/$MAX_RETRIES"
-        nvim --headless -c "MasonInstall --force jdtls java-test java-debug-adapter" -c "qall" 2>/dev/null
-        
-        if [ -d "$HOME/.local/share/nvim/mason/packages/jdtls" ]; then
-            log "INFO" "Paquetes de JDTLS instalados correctamente"
-            break
-        else
-            log "WARN" "Fallo en el intento $i. Reintentando en $RETRY_DELAY segundos..."
-            sleep $RETRY_DELAY
-        fi
-    done
-    
-    # Verificación final robusta
-    local REQUIRED_PACKAGES=(jdtls java-test java-debug-adapter)
-    for pkg in "${REQUIRED_PACKAGES[@]}"; do
-        if [ ! -d "$HOME/.local/share/nvim/mason/packages/$pkg" ]; then
-            log "ERROR" "Paquete crítico faltante: $pkg"
-            exit 1
-        fi
-    done
-
-    # Configuración consolidada sin duplicados
-    local JDTLS_CONFIG='
-    -- Configuración única y completa para JDTLS
-    local jdtls = require("jdtls")
-    local config = {
-        cmd = {
-            "java",
-            "-Declipse.application=org.eclipse.jdt.ls.core.id1",
-            "-Dosgi.bundles.defaultStartLevel=4",
-            "-Declipse.product=org.eclipse.jdt.ls.core.product",
-            "-Dlog.protocol=true",
-            "-Dlog.level=ALL",
-            "-Xmx4g",
-            "--add-modules=ALL-SYSTEM",
-            "--add-opens", "java.base/java.util=ALL-UNNAMED",
-            "--add-opens", "java.base/java.lang=ALL-UNNAMED",
-            "-jar", vim.fn.glob(vim.fn.stdpath("data") .. "/mason/packages/jdtls/plugins/org.eclipse.equinox.launcher_*.jar"),
-            "-configuration", vim.fn.stdpath("data") .. "/mason/packages/jdtls/config_linux",
-            "-data", vim.fn.stdpath("data") .. "/jdtls_workspace"
-        },
-        root_dir = jdtls.setup.find_root({".git", "mvnw", "gradlew"}),
-        settings = {
-            java = {
-                signatureHelp = { enabled = true },
-                contentProvider = { preferred = "fernflower" },
-                configuration = {
-                    runtimes = {
-                        {
-                            name = "JavaSE-17",
-                            path = "'$JAVA_HOME'",
-                        }
-                    }
-                }
-            }
-        },
-        init_options = {
-            bundles = {}
-        }
-    }
-
-    vim.api.nvim_create_autocmd("FileType", {
-        pattern = "java",
-        callback = function()
-            if vim.bo.filetype == "java" and vim.fn.bufname() ~= "" then
-                jdtls.start_or_attach(config)
-            end
-        end
-    })'
-
-    # Manejo de configuración mejorado
-    local NVIM_CONFIG="$HOME/dotfiles/init.lua"
-    if [ -f "$NVIM_CONFIG" ]; then
-        # Limpieza de configuraciones antiguas
-        sed -i '/jdtls\.start_or_attach/,/})/d' "$NVIM_CONFIG"
-        sed -i '/require("jdtls")/d' "$NVIM_CONFIG"
-        
-        # Inserción segura de nueva configuración
-        echo "$JDTLS_CONFIG" | tee -a "$NVIM_CONFIG" >/dev/null
+        # Configurar variables de entorno para fnm
+        export PATH="$HOME/.local/share/fnm:$PATH"
+        eval "$(fnm env --use-on-cd)"
     else
-        log "ERROR" "Archivo de configuración principal no encontrado: $NVIM_CONFIG"
-        exit 1
+        log "INFO" "fnm ya está instalado"
+    fi
+
+    # Cargar fnm en la sesión actual
+    export PATH="$HOME/.local/share/fnm:$PATH"
+    eval "$(fnm env --use-on-cd)"
+
+    # Verificar si la versión de Node.js está instalada
+    if ! fnm list | grep -q "$NODE_LTS_VERSION"; then
+        log "INFO" "Instalando Node.js ${NODE_LTS_VERSION}..."
+        fnm install "$NODE_LTS_VERSION"
+    else
+        log "INFO" "Node.js ${NODE_LTS_VERSION} ya está instalado"
+    fi
+
+    # Establecer la versión por defecto
+    fnm default "$NODE_LTS_VERSION"
+    
+    log "INFO" "Node.js configurado correctamente"
+}
+
+# Función para crear directorios base de Neovim sin configurar
+setup_neovim_dirs() {
+    log "INFO" "Creando directorios base para Neovim..."
+    
+    # Crear directorios necesarios
+    mkdir -p "$HOME/.config/nvim"
+    mkdir -p "$HOME/.vim/undodir"
+    
+    # Solo instalar vim-plug si no está presente
+    local PLUG_FILE="$HOME/.local/share/nvim/site/autoload/plug.vim"
+    if [ ! -f "$PLUG_FILE" ]; then
+        log "INFO" "Instalando vim-plug..."
+        curl -fLo "$PLUG_FILE" --create-dirs \
+            https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+    else
+        log "INFO" "vim-plug ya está instalado"
+    fi
+    
+    log "INFO" "Directorios base de Neovim creados"
+}
+
+# Función para instalar Rust
+install_rust() {
+    if is_installed rustc; then
+        log "INFO" "Rust ya está instalado"
+        return 0
+    fi
+
+    log "INFO" "Instalando Rust..."
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    source "$HOME/.cargo/env"
+    
+    log "INFO" "Rust instalado correctamente"
+}
+
+# Función para instalar Docker
+install_docker() {
+    if command -v docker &> /dev/null; then
+        log "INFO" "Docker ya está instalado"
+        return 0
+    fi
+
+    log "INFO" "Iniciando la instalación de Docker..."
+    
+    if [ "$PACKAGE_MANAGER" == "apt" ]; then
+        # Instalar dependencias necesarias
+        sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
+        
+        # Agregar la clave GPG de Docker
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+        
+        # Agregar el repositorio de Docker a las fuentes de apt
+        echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+        
+        # Actualizar los repositorios nuevamente
+        sudo apt update
+        
+        # Instalar Docker
+        sudo apt install -y docker-ce docker-ce-cli containerd.io
+    elif [ "$PACKAGE_MANAGER" == "pacman" ]; then
+        # Instalar Docker desde los repositorios de Arch
+        sudo pacman -S --noconfirm docker
+    fi
+    
+    log "INFO" "Docker instalado correctamente"
+}
+
+configure_docker() {
+    log "INFO" "Configurando Docker y Docker Compose..."
+
+    # Verificar si el servicio Docker está activo
+    if ! sudo systemctl is-active --quiet docker; then
+        sudo systemctl start docker
+        log "INFO" "Docker no estaba en funcionamiento, se ha iniciado"
+    else
+        log "INFO" "Docker ya está en funcionamiento"
+    fi
+
+    # Verificar si el usuario ya está en el grupo docker
+    if ! groups | grep -q "\bdocker\b"; then
+        # Crear el grupo Docker si no existe
+        if ! getent group docker; then
+            sudo groupadd docker
+            log "INFO" "Grupo Docker creado"
+        fi
+
+        # Agregar al usuario al grupo Docker
+        sudo usermod -aG docker $USER
+        log "INFO" "Usuario añadido al grupo docker"
+    else
+        log "INFO" "Usuario ya pertenece al grupo docker"
+    fi
+
+    # Cambiar la propiedad de /var/run/docker.sock
+    sudo chown "$USER":"$USER" /var/run/docker.sock
+
+    # Establecer permisos adecuados para el socket de Docker
+    sudo chmod g+rw /var/run/docker.sock
+
+    # Verificar si Docker Compose ya está instalado
+    if ! command -v docker-compose &> /dev/null; then
+        # Descargar e instalar Docker Compose
+        sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+
+        # Hacer Docker Compose ejecutable
+        sudo chmod +x /usr/local/bin/docker-compose
+        log "INFO" "Docker Compose instalado correctamente"
+    else
+        log "INFO" "Docker Compose ya está instalado"
     fi
 }
 
-
-configure_wezterm() {
-    log "INFO" "Configurando WezTerm..."
-    
-    local wezterm_config='
-local wezterm = require("wezterm")
-return {
-    font = wezterm.font("Iosevka Nerd Font", {weight="Regular", stretch="Normal", style="Normal"}),
-    font_size = 12.0,
-    color_scheme = "Gruvbox Dark",
-    hide_tab_bar_if_only_one_tab = true,
-    enable_scroll_bar = false,
-    default_prog = { "zsh", "-l" },
-    warn_about_missing_glyphs = false
-}'
-    
-    if [ -f "$HOME/dotfiles/wezterm.lua" ]; then
-        echo "$wezterm_config" > "$HOME/dotfiles/wezterm.lua"
-    else
-        log "ERROR" "Archivo wezterm.lua no encontrado en dotfiles"
-        exit 1
+# Función para instalar Visual Studio Code
+install_vscode() {
+    if command -v code &> /dev/null; then
+        log "INFO" "Visual Studio Code ya está instalado"
+        return 0
     fi
+
+    log "INFO" "Instalando Visual Studio Code..."
+
+    if [ "$PACKAGE_MANAGER" == "apt" ]; then
+        # Instalar dependencias
+        sudo apt install -y software-properties-common apt-transport-https wget
+
+        # Importar la clave GPG de Microsoft
+        wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > packages.microsoft.gpg
+        sudo install -o root -g root -m 644 packages.microsoft.gpg /usr/share/keyrings/
+        rm -f packages.microsoft.gpg
+
+        # Agregar el repositorio de Visual Studio Code
+        echo "deb [arch=amd64 signed-by=/usr/share/keyrings/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main" | sudo tee /etc/apt/sources.list.d/vscode.list
+
+        # Instalar Visual Studio Code
+        sudo apt update
+        sudo apt install -y code
+    elif [ "$PACKAGE_MANAGER" == "pacman" ]; then
+        # En Arch Linux, instalar desde AUR
+        if ! command -v yay &> /dev/null; then
+            log "INFO" "Instalando yay para acceder a AUR..."
+            # Instalar yay si no está disponible
+            git clone https://aur.archlinux.org/yay.git /tmp/yay
+            cd /tmp/yay
+            makepkg -si --noconfirm
+            cd -
+            rm -rf /tmp/yay
+        fi
+        yay -S --noconfirm visual-studio-code-bin
+    fi
+
+    log "INFO" "Visual Studio Code instalado correctamente"
 }
 
-configure_neovim() {
-    log "INFO" "Configurando Neovim..."
+# Función para instalar WezTerm sin configuración
+install_wezterm() {
+    if command -v wezterm &> /dev/null; then
+        log "INFO" "WezTerm ya está instalado"
+        return 0
+    fi
+
+    log "INFO" "Instalando WezTerm..."
     
-    local nvim_dir="$HOME/.config/nvim"
-    local wezterm_dir="$HOME/.config/wezterm"
+    if [ "$PACKAGE_MANAGER" == "apt" ]; then
+        # Instalar clave GPG y configurar repositorio
+        curl -fsSL https://apt.fury.io/wez/gpg.key | sudo gpg --yes --dearmor -o /usr/share/keyrings/wezterm-fury.gpg
+        echo "deb [signed-by=/usr/share/keyrings/wezterm-fury.gpg] https://apt.fury.io/wez/ * *" | \
+            sudo tee /etc/apt/sources.list.d/wezterm.list
+
+        sudo apt update
+        sudo apt install -y wezterm-nightly
+    elif [ "$PACKAGE_MANAGER" == "pacman" ]; then
+        # Instalar desde AUR
+        if ! command -v yay &> /dev/null; then
+            log "INFO" "Instalando yay para acceder a AUR..."
+            git clone https://aur.archlinux.org/yay.git /tmp/yay
+            cd /tmp/yay
+            makepkg -si --noconfirm
+            cd -
+            rm -rf /tmp/yay
+        fi
+        yay -S --noconfirm wezterm-git
+    fi
+    
+    # Crear directorio de configuración sin añadir archivos de configuración
+    mkdir -p "$HOME/.config/wezterm"
+    
+    log "INFO" "WezTerm instalado correctamente"
+}
+
+# Función para crear archivos básicos de configuración
+create_basic_config_files() {
+    log "INFO" "Creando archivos básicos de configuración..."
     
     # Crear directorios si no existen
-    mkdir -p "$nvim_dir" "$wezterm_dir"
+    mkdir -p "$HOME/.config/nvim"
+    mkdir -p "$HOME/.config/wezterm"
     
-    # Configuración de Neovim
-    if [ -f "$HOME/dotfiles/init.lua" ]; then
-        backup_config "$nvim_dir/init.lua"
-        ln -sf "$HOME/dotfiles/init.lua" "$nvim_dir/init.lua"
+    # Comprobar si los archivos existen antes de crearlos
+    if [ ! -f "$HOME/.config/nvim/init.lua" ]; then
+        log "INFO" "Creando archivo básico init.lua para Neovim"
+        cat > "$HOME/.config/nvim/init.lua" <<EOL
+-- Este es un archivo básico de configuración para Neovim
+-- Creado por el script de instalación
+-- Puedes personalizarlo según tus necesidades
+
+-- Configuración básica
+vim.opt.number = true
+vim.opt.relativenumber = true
+vim.opt.expandtab = true
+vim.opt.tabstop = 4
+vim.opt.shiftwidth = 4
+vim.opt.smartindent = true
+vim.opt.wrap = false
+EOL
     else
-        log "ERROR" "Archivo init.lua no encontrado en dotfiles"
-        exit 1
+        log "INFO" "El archivo init.lua ya existe, no se modificará"
     fi
     
-    # Configuración de WezTerm
-    if [ -f "$HOME/dotfiles/wezterm.lua" ]; then
-        backup_config "$wezterm_dir/wezterm.lua"
-        ln -sf "$HOME/dotfiles/wezterm.lua" "$wezterm_dir/wezterm.lua"
+    if [ ! -f "$HOME/.config/wezterm/wezterm.lua" ]; then
+        log "INFO" "Creando archivo básico wezterm.lua"
+        cat > "$HOME/.config/wezterm/wezterm.lua" <<EOL
+-- Este es un archivo básico de configuración para WezTerm
+-- Creado por el script de instalación
+-- Puedes personalizarlo según tus necesidades
+
+local wezterm = require 'wezterm'
+
+local config = {}
+
+if wezterm.config_builder then
+  config = wezterm.config_builder()
+end
+
+-- Configuración básica
+config.font = wezterm.font('Iosevka Nerd Font')
+config.font_size = 14.0
+config.color_scheme = 'Gruvbox Dark'
+
+return config
+EOL
     else
-        log "WARN" "Archivo wezterm.lua no encontrado en dotfiles"
-    fi
-    
-    # Asegurarse de que Neovim esté en el PATH
-    export PATH="/opt/nvim/bin:$PATH"
-    
-    # Instalar plugins de Neovim
-    log "INFO" "Instalando plugins de Neovim..."
-    if is_installed nvim; then
-        nvim --headless "+Lazy sync" +qa
-    else
-        log "WARN" "Neovim no está disponible en el PATH. Se omitirá la instalación de plugins."
-        log "INFO" "Ejecuta manualmente 'nvim' después de reiniciar la terminal para instalar los plugins."
+        log "INFO" "El archivo wezterm.lua ya existe, no se modificará"
     fi
 }
 
-configure_jdtls() {
-    log "INFO" "Configurando JDTLS para Neovim..."
-    
-    # Instalación forzada y limpieza previa
-    nvim --headless -c "MasonInstall --force jdtls java-test java-debug-adapter" -c 'qall'
-    
-    # Configuración mejorada
-    local jdtls_config='
-local jdtls = require("jdtls")
-local config = {
-    cmd = {
-        "java",
-        "-Declipse.application=org.eclipse.jdt.ls.core.id1",
-        "-Dosgi.bundles.defaultStartLevel=4",
-        "-Declipse.product=org.eclipse.jdt.ls.core.product",
-        "-Dlog.protocol=true",
-        "-Dlog.level=ALL",
-        "-Xmx4g",
-        "--add-modules=ALL-SYSTEM",
-        "--add-opens", "java.base/java.util=ALL-UNNAMED",
-        "--add-opens", "java.base/java.lang=ALL-UNNAMED",
-        "-jar", vim.fn.glob(vim.fn.stdpath("data") .. "/mason/packages/jdtls/plugins/org.eclipse.equinox.launcher_*.jar"),
-        "-configuration", vim.fn.stdpath("data") .. "/mason/packages/jdtls/config_linux",
-        "-data", vim.fn.stdpath("data") .. "/jdtls_workspace"
-    },
-    root_dir = jdtls.setup.find_root({".git", "mvnw", "gradlew"}),
-    settings = {
-        java = {
-            signatureHelp = { enabled = true },
-            contentProvider = { preferred = "fernflower" },
-            configuration = {
-                runtimes = {
-                    {
-                        name = "JavaSE-17",
-                        path = "'$JAVA_HOME'",
-                    }
-                }
-            }
-        }
-    },
-    init_options = {
-        bundles = {}
-    }
-}
-
-vim.api.nvim_create_autocmd("FileType", {
-    pattern = "java",
-    callback = function()
-        if vim.bo.filetype == "java" and vim.fn.bufname() ~= "" then
-            jdtls.start_or_attach(config)
-        end
-    end,
-})'
-
-    # Manejo seguro de la configuración
-    if [ -f "$HOME/dotfiles/init.lua" ]; then
-        # Eliminar configuraciones antiguas
-        sed -i '/jdtls\.start_or_attach/,/})/d' "$HOME/dotfiles/init.lua"
-        sed -i '/require("jdtls")/d' "$HOME/dotfiles/init.lua"
-        
-        # Añadir nueva configuración
-        echo "$jdtls_config" >> "$HOME/dotfiles/init.lua"
-    else
-        log "ERROR" "Archivo init.lua no encontrado en dotfiles"
-        exit 1
-    fi
-}
-# Función principal optimizada
+# Función principal modificada
 main() {
-    log "INFO" "Iniciando instalación completa..."
+    log "INFO" "Iniciando instalación del entorno de desarrollo..."
+
+    # Detectar la distribución
+    detect_distro
     
-    # Secuencia de instalación optimizada
+    # Ejecutar instalaciones en orden seguro
     install_system_dependencies
-    setup_dotfiles
-    install_nerd_fonts
-    install_wezterm
     install_neovim
-    configure_neovim
+    install_nerd_fonts
     setup_node
-    install_language_servers
-    setup_zsh
+    setup_java
+    install_wezterm
+    install_rust
+    setup_neovim_dirs  # Solo crea directorios, no configura
     install_docker
     configure_docker
-    setup_java
-    install_java_dependencies
-    install_rust
-    configure_jdtls
-    configure_wezterm
+    install_vscode
+    setup_zsh
     
-    log "SUCCESS" "¡Instalación completada con éxito!"
-    log "INFO" "Por favor, cierra y reinicia tu terminal"
+    # Crear archivos básicos de configuración
+    create_basic_config_files
+
+    log "INFO" "¡Instalación completada!"
+    log "WARN" "Por favor, cierra esta terminal y abre una nueva para aplicar todos los cambios"
+    log "INFO" "Tu shell por defecto ha sido cambiada a Zsh"
+    log "INFO" "Se han creado archivos básicos de configuración. Personalízalos según tus necesidades."
 }
 
-# Ejecución principal
+# Ejecutar el script
 main "$@"
