@@ -138,28 +138,33 @@ install_wezterm() {
 }
 
 setup_node() {
-    if ! is_installed fnm; then
+    log "INFO" "Configurando entorno Node.js..."
+    
+    # Instalación robusta de fnm
+    if ! command -v fnm &>/dev/null; then
         log "INFO" "Instalando fnm..."
-        curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell
-        echo 'export PATH="$HOME/.local/share/fnm:$PATH"' >> ~/.zshrc
+        curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell --install-dir "$HOME/.fnm"
+        echo 'export PATH="$HOME/.fnm:$PATH"' >> ~/.zshrc
         echo 'eval "$(fnm env --use-on-cd)"' >> ~/.zshrc
         source ~/.zshrc
     fi
 
-    log "INFO" "Instalando Node.js ${NODE_LTS_VERSION}..."
-    fnm install --lts
-    fnm default ${NODE_LTS_VERSION}
+    # Instalación específica de versión Node.js
+    log "INFO" "Instalando Node.js v${NODE_LTS_VERSION}..."
+    fnm install --lts=erbium
+    fnm default "$NODE_LTS_VERSION"
     fnm use default
-    
-    # Verificar npm
-    if ! is_installed npm; then
-        log "ERROR" "npm no está disponible después de instalar Node.js"
-        exit 1
-    fi
-    
+
+    # Configuración de npm segura
+    local NPM_PACKAGES=(typescript typescript-language-server prettier @prisma/language-server)
     log "INFO" "Instalando paquetes globales de npm..."
-    npm install -g --force ${REQUIRED_NPM_PKGS[@]}
+    npm install -g --prefix "$HOME/.npm-global" "${NPM_PACKAGES[@]}" 2>&1 | while read line; do log "NPM" "$line"; done
+    
+    # Añadir npm al PATH
+    echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.zshrc
+    export PATH="$HOME/.npm-global/bin:$PATH"
 }
+
 
 install_language_servers() {
     log "INFO" "Instalando herramientas Python..."
@@ -223,18 +228,26 @@ install_docker() {
 configure_docker() {
     log "INFO" "Configurando Docker..."
     
+    # Verificación y configuración de grupos
     if ! groups | grep -q docker; then
         log "INFO" "Añadiendo usuario al grupo docker..."
-        sudo usermod -aG docker $USER
-        newgrp docker
+        sudo usermod -aG docker "$USER"
+        newgrp docker <<< "echo 'Grupo docker actualizado'"
     fi
     
-    # Reiniciar servicio solo si es necesario
+    # Reinicio seguro del servicio
     if ! systemctl is-active --quiet docker; then
-        sudo systemctl restart docker
+        log "INFO" "Iniciando servicio Docker..."
+        sudo systemctl start docker
+        sudo systemctl enable docker
+    fi
+    
+    # Verificación final
+    if ! docker info &>/dev/null; then
+        log "ERROR" "No se pudo inicializar Docker correctamente"
+        exit 1
     fi
 }
-
 
 setup_java() {
     if ! is_installed java; then
@@ -313,83 +326,91 @@ install_nerd_fonts() {
 configure_jdtls() {
     log "INFO" "Configurando JDTLS para Neovim..."
     
-    # Intento de instalación con reintentos
-    for attempt in {1..3}; do
-        nvim --headless -c "MasonInstall --force jdtls java-test java-debug-adapter" -c "qall"
+    # Intento de instalación con reintentos mejorado
+    MAX_RETRIES=3
+    RETRY_DELAY=5
+    for ((i=1; i<=$MAX_RETRIES; i++)); do
+        log "INFO" "Intento de instalación $i/$MAX_RETRIES"
+        nvim --headless -c "MasonInstall --force jdtls java-test java-debug-adapter" -c "qall" 2>/dev/null
+        
         if [ -d "$HOME/.local/share/nvim/mason/packages/jdtls" ]; then
+            log "INFO" "Paquetes de JDTLS instalados correctamente"
             break
         else
-            log "WARN" "Intento $attempt fallido. Reintentando..."
-            sleep 2
+            log "WARN" "Fallo en el intento $i. Reintentando en $RETRY_DELAY segundos..."
+            sleep $RETRY_DELAY
         fi
     done
-    # Verificación final
-    if [ ! -d "$HOME/.local/share/nvim/mason/packages/jdtls" ]; then
-        log "ERROR" "Falló la instalación de JDTLS después de 3 intentos"
-        exit 1
-    fi
-
-    # Instalación forzada y limpieza previa
-    nvim --headless -c "MasonInstall --force jdtls java-test java-debug-adapter" -c 'qall'
     
-    # Configuración mejorada
-    local jdtls_config='
-local jdtls = require("jdtls")
-local config = {
-    cmd = {
-        "java",
-        "-Declipse.application=org.eclipse.jdt.ls.core.id1",
-        "-Dosgi.bundles.defaultStartLevel=4",
-        "-Declipse.product=org.eclipse.jdt.ls.core.product",
-        "-Dlog.protocol=true",
-        "-Dlog.level=ALL",
-        "-Xmx4g",
-        "--add-modules=ALL-SYSTEM",
-        "--add-opens", "java.base/java.util=ALL-UNNAMED",
-        "--add-opens", "java.base/java.lang=ALL-UNNAMED",
-        "-jar", vim.fn.glob(vim.fn.stdpath("data") .. "/mason/packages/jdtls/plugins/org.eclipse.equinox.launcher_*.jar"),
-        "-configuration", vim.fn.stdpath("data") .. "/mason/packages/jdtls/config_linux",
-        "-data", vim.fn.stdpath("data") .. "/jdtls_workspace"
-    },
-    root_dir = jdtls.setup.find_root({".git", "mvnw", "gradlew"}),
-    settings = {
-        java = {
-            signatureHelp = { enabled = true },
-            contentProvider = { preferred = "fernflower" },
-            configuration = {
-                runtimes = {
-                    {
-                        name = "JavaSE-17",
-                        path = "'$JAVA_HOME'",
+    # Verificación final robusta
+    local REQUIRED_PACKAGES=(jdtls java-test java-debug-adapter)
+    for pkg in "${REQUIRED_PACKAGES[@]}"; do
+        if [ ! -d "$HOME/.local/share/nvim/mason/packages/$pkg" ]; then
+            log "ERROR" "Paquete crítico faltante: $pkg"
+            exit 1
+        fi
+    done
+
+    # Configuración consolidada sin duplicados
+    local JDTLS_CONFIG='
+    -- Configuración única y completa para JDTLS
+    local jdtls = require("jdtls")
+    local config = {
+        cmd = {
+            "java",
+            "-Declipse.application=org.eclipse.jdt.ls.core.id1",
+            "-Dosgi.bundles.defaultStartLevel=4",
+            "-Declipse.product=org.eclipse.jdt.ls.core.product",
+            "-Dlog.protocol=true",
+            "-Dlog.level=ALL",
+            "-Xmx4g",
+            "--add-modules=ALL-SYSTEM",
+            "--add-opens", "java.base/java.util=ALL-UNNAMED",
+            "--add-opens", "java.base/java.lang=ALL-UNNAMED",
+            "-jar", vim.fn.glob(vim.fn.stdpath("data") .. "/mason/packages/jdtls/plugins/org.eclipse.equinox.launcher_*.jar"),
+            "-configuration", vim.fn.stdpath("data") .. "/mason/packages/jdtls/config_linux",
+            "-data", vim.fn.stdpath("data") .. "/jdtls_workspace"
+        },
+        root_dir = jdtls.setup.find_root({".git", "mvnw", "gradlew"}),
+        settings = {
+            java = {
+                signatureHelp = { enabled = true },
+                contentProvider = { preferred = "fernflower" },
+                configuration = {
+                    runtimes = {
+                        {
+                            name = "JavaSE-17",
+                            path = "'$JAVA_HOME'",
+                        }
                     }
                 }
             }
+        },
+        init_options = {
+            bundles = {}
         }
-    },
-    init_options = {
-        bundles = {}
     }
-}
 
-vim.api.nvim_create_autocmd("FileType", {
-    pattern = "java",
-    callback = function()
-        if vim.bo.filetype == "java" and vim.fn.bufname() ~= "" then
-            jdtls.start_or_attach(config)
+    vim.api.nvim_create_autocmd("FileType", {
+        pattern = "java",
+        callback = function()
+            if vim.bo.filetype == "java" and vim.fn.bufname() ~= "" then
+                jdtls.start_or_attach(config)
+            end
         end
-    end,
-})'
+    })'
 
-    # Manejo seguro de la configuración
-    if [ -f "$HOME/dotfiles/init.lua" ]; then
-        # Eliminar configuraciones antiguas
-        sed -i '/jdtls\.start_or_attach/,/})/d' "$HOME/dotfiles/init.lua"
-        sed -i '/require("jdtls")/d' "$HOME/dotfiles/init.lua"
+    # Manejo de configuración mejorado
+    local NVIM_CONFIG="$HOME/dotfiles/init.lua"
+    if [ -f "$NVIM_CONFIG" ]; then
+        # Limpieza de configuraciones antiguas
+        sed -i '/jdtls\.start_or_attach/,/})/d' "$NVIM_CONFIG"
+        sed -i '/require("jdtls")/d' "$NVIM_CONFIG"
         
-        # Añadir nueva configuración
-        echo "$jdtls_config" >> "$HOME/dotfiles/init.lua"
+        # Inserción segura de nueva configuración
+        echo "$JDTLS_CONFIG" | tee -a "$NVIM_CONFIG" >/dev/null
     else
-        log "ERROR" "Archivo init.lua no encontrado en dotfiles"
+        log "ERROR" "Archivo de configuración principal no encontrado: $NVIM_CONFIG"
         exit 1
     fi
 }
@@ -614,16 +635,17 @@ vim.api.nvim_create_autocmd("FileType", {
         exit 1
     fi
 }
+# Función principal optimizada
 main() {
-    log "INFO" "Iniciando instalación..."
+    log "INFO" "Iniciando instalación completa..."
     
-    # Orden crítico revisado
+    # Secuencia de instalación optimizada
     install_system_dependencies
     setup_dotfiles
     install_nerd_fonts
-    install_wezterm          # Instalar antes de configurar
+    install_wezterm
     install_neovim
-    configure_neovim         # Configurar después de instalar
+    configure_neovim
     setup_node
     install_language_servers
     setup_zsh
@@ -633,10 +655,11 @@ main() {
     install_java_dependencies
     install_rust
     configure_jdtls
-    configure_wezterm        # Configurar después de instalar fuentes
+    configure_wezterm
     
-    log "INFO" "¡Instalación completada!"
+    log "SUCCESS" "¡Instalación completada con éxito!"
+    log "INFO" "Por favor, cierra y reinicia tu terminal"
 }
 
-# Ejecutar el script
+# Ejecución principal
 main "$@"
