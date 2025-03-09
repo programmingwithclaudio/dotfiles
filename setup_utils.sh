@@ -139,32 +139,22 @@ install_wezterm() {
 
 setup_node() {
     log "INFO" "Configurando entorno Node.js..."
-    
-    # Instalación robusta de fnm
-    if ! command -v fnm &>/dev/null; then
+    if ! is_installed fnm; then
         log "INFO" "Instalando fnm..."
-        curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell --install-dir "$HOME/.fnm"
-        echo 'export PATH="$HOME/.fnm:$PATH"' >> ~/.zshrc
-        echo 'eval "$(fnm env --use-on-cd)"' >> ~/.zshrc
-        source ~/.zshrc
+        curl -fsSL https://fnm.vercel.app/install | bash
+        export PATH="$HOME/.local/share/fnm:$PATH"
+        eval "$(fnm env --shell=bash)"
     fi
 
-    # Instalación específica de versión Node.js
-    log "INFO" "Instalando Node.js v${NODE_LTS_VERSION}..."
-    fnm install --lts=erbium
+    log "INFO" "Instalando Node.js ${NODE_LTS_VERSION}..."
+    # Usar la versión exacta sin --lts
+    fnm install "$NODE_LTS_VERSION"
     fnm default "$NODE_LTS_VERSION"
     fnm use default
-
-    # Configuración de npm segura
-    local NPM_PACKAGES=(typescript typescript-language-server prettier @prisma/language-server)
-    log "INFO" "Instalando paquetes globales de npm..."
-    npm install -g --prefix "$HOME/.npm-global" "${NPM_PACKAGES[@]}" 2>&1 | while read line; do log "NPM" "$line"; done
     
-    # Añadir npm al PATH
-    echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.zshrc
-    export PATH="$HOME/.npm-global/bin:$PATH"
+    log "INFO" "Instalando paquetes globales de npm..."
+    npm install -g typescript typescript-language-server prettier @prisma/language-server
 }
-
 
 install_language_servers() {
     log "INFO" "Instalando herramientas Python..."
