@@ -8,7 +8,6 @@ IFS=$'\n\t'
 NVIM_VERSION="v0.10.3"
 NERD_FONT="Iosevka"
 FONT_VERSION="v3.3.0"
-NODE_LTS_VERSION="22.13.1"
 JAVA_VERSION="21.0.5-oracle"
 JAVA_LTS_VERSION="17.0.12-oracle"
 
@@ -352,37 +351,6 @@ install_nerd_fonts() {
     log "INFO" "Nerd Font instalada correctamente"
 }
 
-# Función para instalar y configurar fnm y Node.js
-setup_node() {
-    # Verificar si fnm está instalado
-    if ! command -v fnm &> /dev/null; then
-        log "INFO" "Instalando fnm..."
-        curl -fsSL https://fnm.vercel.app/install | bash
-
-        # Configurar variables de entorno para fnm
-        export PATH="$HOME/.local/share/fnm:$PATH"
-        eval "$(fnm env --use-on-cd)"
-    else
-        log "INFO" "fnm ya está instalado"
-    fi
-
-    # Cargar fnm en la sesión actual
-    export PATH="$HOME/.local/share/fnm:$PATH"
-    eval "$(fnm env --use-on-cd)"
-
-    # Verificar si la versión de Node.js está instalada
-    if ! fnm list | grep -q "$NODE_LTS_VERSION"; then
-        log "INFO" "Instalando Node.js ${NODE_LTS_VERSION}..."
-        fnm install "$NODE_LTS_VERSION"
-    else
-        log "INFO" "Node.js ${NODE_LTS_VERSION} ya está instalado"
-    fi
-
-    # Establecer la versión por defecto
-    fnm default "$NODE_LTS_VERSION"
-    
-    log "INFO" "Node.js configurado correctamente"
-}
 
 # Función para crear directorios base de Neovim sin configurar
 setup_neovim_dirs() {
@@ -623,7 +591,6 @@ main() {
     install_system_dependencies
     install_neovim
     install_nerd_fonts
-    setup_node
     setup_java
     install_wezterm
     install_rust

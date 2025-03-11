@@ -1,5 +1,6 @@
 -- init.lua
 -- Configuración de Neovim optimizada para TypeScript/Next.js y Python
+vim.g.python3_host_prog = "~/.venvs/nvim/bin/python"
 
 -- Configuración para ts_context_commentstring
 vim.g.skip_ts_context_commentstring_module = true
@@ -38,6 +39,7 @@ vim.opt.scrolloff = 8
 vim.opt.signcolumn = "yes"
 vim.opt.updatetime = 50
 -- vim.opt.colorcolumn = "88"
+
 
 -- Configuración de plugins
 require("lazy").setup({
@@ -79,35 +81,20 @@ require("lazy").setup({
     },
     config = function()
       require("venv-selector").setup({
-        -- Nueva configuración para la versión 2024
-    	stay_on_this_version = true,
+        stay_on_this_version = true,
         search_venv_managers = true,
         search_workspace = true,
         parents = 2,
         enabled = true,
-        search = {
-          -- Patrones personalizados para búsqueda
-          "venv",
-          ".venv",
-          "env",
-          ".env",
-          -- Patrones para poetry, pipenv, etc.
-          ".*/pypoetry/virtualenvs/.*",
-          ".*/virtualenvs/.*",
-          -- Patrones para conda
-          "conda.*",
-        },
+        search = { "venv", ".venv", "env", ".env", ".*/pypoetry/virtualenvs/.*", ".*/virtualenvs/.*", "conda.*" },
         dap_enabled = true,
-        name = {
-          "venv",
-          ".venv",
-          "env",
-          ".env",
-        },
-        path = vim.fn.stdpath("data") .. "/venv",
+        name = { "venv", ".venv", "env", ".env" },
+        path = "~/.venvs/nvim",  -- Aquí indicas la ruta donde tienes tu entorno
       })
     end,
   },
+  
+
   -- Debug
   {
     "mfussenegger/nvim-dap",
@@ -169,6 +156,7 @@ require("lazy").setup({
   },
 })
 
+
 -- Configuración de LSP
 require("mason").setup()
 require("mason-lspconfig").setup({
@@ -190,6 +178,11 @@ require("mason-lspconfig").setup({
 })
 
 local lspconfig = require('lspconfig')
+lspconfig.jdtls.setup({
+  cmd = { "jdtls" },
+  root_dir = lspconfig.util.root_pattern(".git", "mvnw", "gradlew"),
+})
+
 
 
 -- Función común para configurar keymaps LSP
@@ -280,7 +273,7 @@ local jdtls = require('jdtls')
 local home = vim.fn.expand("~")
 local mason_path = home .. "/.local/share/nvim/mason"
 local jdtls_path = mason_path .. "/packages/jdtls"
-local launcher_jar = jdtls_path .. "/plugins/org.eclipse.equinox.launcher_1.6.900.v20240613-2009.jar"
+local launcher_jar = jdtls_path .. "/plugins/org.eclipse.equinox.launcher_1.6.1100.v20250306-0509.jar"
 
 -- Seleccionar la configuración correcta dependiendo del sistema operativo
 local config_path = jdtls_path .. "/config_"

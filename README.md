@@ -9,6 +9,7 @@
 
 - **Requirements**:
  -  Git
+ -  Node
  -  yay
 
 - **Clone dotfiles or download**
@@ -21,6 +22,18 @@
   ```bash
   chmod +x ~/dotfiles/setup_utils.sh
   ~/dotfiles/setup_utils.sh
+  ```
+  - Reemplaza los files basicos de configuracion por los de la repo
+  ```bash
+  python3 -m venv ~/.venvs/nvim
+  npm install -g typescript typescript-language-server prettier @prisma/language-server pyright
+
+  
+  mkdir -p ~/.local/share/nvim/mason/packages/jdtls
+  cd ~/.local/share/nvim/mason/packages/jdtls
+  wget -O jdtls.tar.gz https://download.eclipse.org/jdtls/snapshots/jdt-language-server-latest.tar.gz
+  tar -xzf jdtls.tar.gz
+
   ```
   - Reemplaza los files basicos de configuracion por los de la repo
   ```bash
