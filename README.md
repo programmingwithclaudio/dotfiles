@@ -9,6 +9,7 @@
 
 - **Requirements**:
  -  Git
+ -  yay
 
 - **Clone dotfiles or download**
   Ejecuta el siguiente comando en tu terminal para clonar el repositorio que contiene tus configuraciones personalizadas:

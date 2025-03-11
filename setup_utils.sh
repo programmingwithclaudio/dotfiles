@@ -8,7 +8,7 @@ IFS=$'\n\t'
 NVIM_VERSION="v0.10.3"
 NERD_FONT="Iosevka"
 FONT_VERSION="v3.3.0"
-NODE_LTS_VERSION="20.11.1"
+NODE_LTS_VERSION="22.13.1"
 JAVA_VERSION="21.0.5-oracle"
 JAVA_LTS_VERSION="17.0.12-oracle"
 
@@ -522,16 +522,7 @@ install_vscode() {
         sudo apt install -y code
     elif [ "$PACKAGE_MANAGER" == "pacman" ]; then
         # En Arch Linux, instalar desde AUR
-        if ! command -v yay &> /dev/null; then
-            log "INFO" "Instalando yay para acceder a AUR..."
-            # Instalar yay si no está disponible
-            git clone https://aur.archlinux.org/yay.git /tmp/yay
-            cd /tmp/yay
-            makepkg -si --noconfirm
-            cd -
-            rm -rf /tmp/yay
-        fi
-        yay -S --noconfirm visual-studio-code-bin
+        yay -S --noconfirm code
     fi
 
     log "INFO" "Visual Studio Code instalado correctamente"
@@ -556,15 +547,7 @@ install_wezterm() {
         sudo apt install -y wezterm-nightly
     elif [ "$PACKAGE_MANAGER" == "pacman" ]; then
         # Instalar desde AUR
-        if ! command -v yay &> /dev/null; then
-            log "INFO" "Instalando yay para acceder a AUR..."
-            git clone https://aur.archlinux.org/yay.git /tmp/yay
-            cd /tmp/yay
-            makepkg -si --noconfirm
-            cd -
-            rm -rf /tmp/yay
-        fi
-        yay -S --noconfirm wezterm-git
+        yay -S --noconfirm wezterm
     fi
     
     # Crear directorio de configuración sin añadir archivos de configuración
